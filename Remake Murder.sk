@@ -1,0 +1,2432 @@
+options:
+	s: &c[&5&lMurder&f&c]&6
+#System
+	timeover: 180 #(seconds)
+	gold_rush_time: 60 #(seconds)
+	money_variable: {money.%player%}
+	restart_time: 30 #(seconds)
+#gold spawn
+	gold_spawn_time: 10 seconds
+#Skills
+	speed_1_price: 50
+	speed_2_price: 100
+	speed_3_price: 300
+#luck
+	luck_1_price: 200
+	luck_2_price: 400
+	luck_3_price: 600
+#sinn
+	sin_1_price: 100
+	sin_2_price: 500
+	sin_3_price: 800
+#shot
+	shot_1_price: 300
+	shot_2_price: 600
+	shot_3_price: 900
+#Grand Horse
+	grand_horse_price: 1000
+#Other
+	head_select_menu_item_id: 397 #(Player Head)
+
+command /jk:
+	permission: skript.admin
+	trigger:
+		delete {oni}
+		delete {dete}
+		delete {allplayer::*}
+		delete {players}
+		clear {_temponi::*} #loop内の一時リスト変数と思われないように初期化(うまく動作しなければアンダーバーを外してください)
+		clear {_tempdete::*} #loop内の一時リスト変数と思われないように初期化(うまく動作しなければアンダーバーを外してください)
+		loop all players:
+			if {nojoin.%loop-player%} is "on":
+				send "{@s} &cあなたは今回のゲームには参加しません" to loop-player
+			else if {c.%loop-player%} is true:
+				send "{@s} &cあなたは今回のゲームには参加しません" to loop-player
+			else:
+				add loop-player to {allplayer::*}
+				add loop-player to {member::*}
+				add loop-player to {aliveplayer::*}
+				loop {onichance::%loop-player%} times:
+					add loop-player to {_temponi::*}
+				loop {detechance::%loop-player%} times:
+					add loop-player to {_tempdete::*}
+		set {oni} to random player of {_temponi::*}
+		remove {oni} from {allplayer::*}
+		loop {_tempdete::*}:
+			if loop-value is {oni}:
+				remove loop-value from {_tempdete::*}
+		set {dete} to random player of {_tempdete::*}
+		send title "&c&lMurder" to {oni} for 2 seconds
+		send title "&a&lInnocent" to {allplayer::*} for 2 seconds
+		send title "&b&lDetective" to {dete} for 2 seconds
+		loop {allplayer::*}:
+			set {Role.%{allplayer::%loop-index%}%} to "&aInnocent" #role設定
+			add 1 to {players} 
+			add 1 to {member}
+		set {Role.%{oni}%} to "&cMurder"
+		set {Role.%{dete}%} to "&bDetective"
+		loop {member::*}:
+			set {member::%loop-index%} tab name to "&6%{member::%loop-index%}%" #Tabの名前
+			rs({member::%loop-index%}) #スコアボード
+		stop
+
+function gold_rush_chance() :: number:
+	loop all players:
+		add 1 to {_gold_rush_chance}
+		if {bonus_gold_chance.%loop-player%} is set: #SOHPでゴールドラッシュの確率を上げた人
+			add {bonus_gold_chance.%loop-player%} to {_gold_rush_chance}
+	return round({_gold_rush_chance})
+
+function gold_rush_jk():
+	delete {oni}
+	delete {dete}
+	delete {allplayer::*}
+	delete {players}
+	clear {_temponi::*} #loop内の一時リスト変数と思われないように初期化(うまく動作しなければアンダーバーを外してください)
+	loop all players:
+		if {nojoin.%loop-player%} is "on":
+			send "{@s} &cあなたは今回のゲームには参加しません" to loop-player
+		else:
+			add loop-player to {allplayer::*}
+			add loop-player to {member::*}
+			add loop-player to {aliveplayer::*}
+			loop {onichance::%loop-player%} times:
+				add loop-player to {_temponi::*}
+	set {oni} to random player of {_temponi::*}
+	remove {oni} from {allplayer::*}
+	send title "&c&lMurder" to {oni} for 2 seconds
+	send title "&a&lInnocent" to {allplayer::*} for 2 seconds
+	loop {allplayer::*}:
+		set {Role.%{allplayer::%loop-index%}%} to "&aInnocent" #role設定
+		add 1 to {players} 
+		add 1 to {member}
+	set {Role.%{oni}%} to "&cMurder"
+	loop {member::*}:
+		set {member::%loop-index%} tab name to "&6%{member::%loop-index%}%" #Tabの名前
+		rs({member::%loop-index%}) #スコアボード
+	stop
+
+function start_gold_rush():
+	send title "&e&lGOLD RUSH" to all players for 2 seconds
+	gold_rush_jk()
+	wait 4 seconds
+	send "&6&l光っている人にダメージを与えよう！" to {member::*}
+	set {gold_rush} to true
+	execute console command "/effect @a clear"
+	loop {member::*}:
+		set loop-value's gamemode to adventure
+		clear loop-value's inventory
+		rank_flight(loop-value, "off")
+	set {map} to selectmap()
+	if {member::*} is not set:
+		broadcast "{@s} &cゲームを開始できません"
+		wait 3 seconds
+		execute console command "/stopgame"
+		stop
+	if size({member::*}) <= 1:
+		broadcast "{@s} &cゲームを開始できません"
+		wait 3 seconds
+		execute console command "/stopgame"
+		stop
+	loop {member::*}:
+		rs({member::%loop-index%})
+		map_tp(loop-value)
+	rank_flight({member::*}, "off")
+	send title "&e&lGOLD RUSH Start" to all players for 1 seconds
+	set {_swordname} to random element of {swordname::*}
+	set slot 1 of {oni} to iron sword named "%{_swordname}%"
+	gold_rush_time()
+	command "/effect %{oni}% minecraft:glowing 75"
+	reaming_timer({member::*}, {time.%{timenum}%} - floor(unix timestamp of now)) #ボスバーに表示する奴
+	stop
+
+command /opjoin:
+	permission: skript.admin
+	trigger:
+		if {opjoin} is "join":
+			set {opjoin} to "nojoin"
+			broadcast "{@s} OPの参加を&cOFF&6にしました"
+			stop
+		if {opjoin} is "nojoin":
+			set {opjoin} to "join"
+			broadcast "{@s} OPの参加を&aON&6にしました"
+			stop
+		if {opjoin} is not set:
+			set {opjoin} to "nojoin"
+			broadcast "{@s} OPの参加を&cOFF&6にしました"
+			stop
+command /start:
+	permission: skript.admin
+	trigger:
+		broadcast "{@s} ゲームを開始します"
+		chance of gold_rush_chance()%: #確率計算
+			start_gold_rush()
+			stop
+		execute console command "/jk"
+		wait 4 seconds
+		set {game} to true
+		execute console command "/effect @a clear"
+		loop {member::*}:
+			set loop-value's gamemode to adventure
+			clear loop-value's inventory
+			rank_flight(loop-value, "off")
+			if {head_selected.%loop-value%} is set:
+				set helmet of loop-value to {head_selected.%loop-value%} with lore ""
+		set {map} to selectmap()
+		if {member::*} is not set:
+			broadcast "{@s} &cゲームを開始できません"
+			wait 3 seconds
+			execute console command "/stopgame"
+			stop
+		if size({member::*}) <= 1:
+			broadcast "{@s} &cゲームを開始できません"
+			wait 3 seconds
+			execute console command "/stopgame"
+			stop
+		if {players} >= 15:
+			set {2damage} to true
+			broadcast "{@s} 今回はイノセントの数が多いのでマーダーが強化されます"
+		loop {member::*}:
+			rs({member::%loop-index%})
+			map_tp({member::%loop-index%})
+			luck({member::%loop-index%})
+		rank_flight({member::*}, "off")
+		broadcast "{@s} 10秒後にMurderに剣が渡されます"
+		wait a seconds
+		sound(all players, "ui.button.click")
+		send title "&6&l5" to all players for 1 seconds
+		wait a seconds
+		sound(all players, "ui.button.click")
+		send title "&6&l4" to all players for 1 seconds
+		wait a seconds
+		sound(all players, "ui.button.click")
+		send title "&c&l3" to all players for 1 seconds
+		wait a seconds
+		sound(all players, "ui.button.click")
+		send title "&d&l2" to all players for 1 seconds
+		wait a seconds
+		sound(all players, "ui.button.click")
+		send title "&a&l1" to all players for 1 seconds
+		wait a seconds
+		sound(all players, "block.end_portal.spawn", 0.8)
+		send title "&6&lGame Start" to all players for 1 seconds
+		set {_bowname} to random element of {bowname::*}
+		give bow named "%{_bowname}%" to {dete}
+		give arrow to {dete}
+		set {_swordname} to random element of {swordname::*}
+		set slot 1 of {oni} to iron sword named "%{_swordname}%"
+		timelimit()
+		reaming_timer({member::*}, {time.%{timenum}%} - floor(unix timestamp of now)) #ボスバーに表示する奴
+		stop
+
+command /stopgame:
+	permission: skript.admin
+	trigger:
+		broadcast "{@s} ゲームを終了しました"
+		set {onichance::%{oni}%} to 0
+		set {detechance::%{dete}%} to 0
+		loop {member::*}:
+			add 1 to {onichance::%loop-value%}
+			add 1 to {detechance::%loop-value%}
+			teleport loop-value to {lobby}
+			clear loop-value's inventory
+			set loop-value's gamemode to adventure
+			set slot 0 of loop-value to skull of loop-value
+			rank_flight(loop-value, "on")
+		delete {oni}
+		delete {allplayer::*}
+		delete {dete}
+		delete {players}
+		delete {member::*}
+		delete {aliveplayer::*}
+		delete {korosita}
+		delete {havebow}
+		delete {2damage}
+		delete {timea0}
+		delete {timea1}
+		delete {timea2}
+		delete {timea3}
+		delete {time.%{timenum}%}
+		delete {gold_rush}
+		set {game} to false
+		set {ending} to false
+		set {deteis} to "&aAlive"
+		execute console command "/time set day"
+		chance of 50%:
+			execute console command "/time set night"
+		execute console command "/kill @e[type=item]"
+		execute console command "/effect @a clear"
+		delete_corpses()
+		loop entities:
+			loop-entity is dropped item 
+			delete loop-entity
+		loop all players:
+			set {death.%loop-player%} to false
+			set {gg.%loop-player%} to true
+			rs(loop-player)
+			lvup(loop-player)
+			if {win.toggle.%loop-player%} is true:
+				win(loop-player)
+		if {re} is true:
+			broadcast "&6{@restart_time}秒後にリスタートします。"
+			wait {@restart_time} seconds
+			execute console command "/start"
+command /players:
+	permission: skript.admin
+	trigger:
+		send "&a%{allplayer::*}%"
+		send "&3%{member::*}%"
+		send "&d%{players}%"
+		send "&c%{oni}%"
+		send "&b%{dete}%"
+command /re:
+	permission: skript.admin
+	trigger:
+		if {re} is not set:
+			set {re} to true
+			broadcast "{@s} リスタートを&a有効&6にしました"
+			stop
+		if {re} is true:
+			set {re} to false
+			broadcast "{@s} リスタートを&c無効&6にしました"
+			stop
+		if {re} is false:
+			set {re} to true
+			broadcast "{@s} リスタートを&a有効&6にしました"
+			stop
+#re
+command /map [<text>] [<text>]:
+	trigger:
+		if arg 1 is "add":
+			if arg 2 is set:
+				if {maplist::*} do not contain arg 2:
+					add arg 2 to {maplist::*}
+					send "&6MAPを追加しました。 &a(%arg 2%)" to ops
+				add location of player to {map::%arg 2%::teleport::*}
+				send "&6TP先を追加しました。 &a(%arg 2%)" to ops
+				stop
+		if arg 1 is "gold":
+			if arg 2 is set:
+				add location of player to {map::%arg 2%::gold_spawn::*}
+				send "&6金のスポーン地点を設定しました。 &a(%arg 2%)" to ops
+				stop
+		if arg 1 is "remove" or "delete":
+			if arg 2 is set:
+				if {maplist::*} do not contain arg 2:
+					send "&cそのMAPは存在しません" to ops
+					stop
+				remove arg 2 from {maplist::*}
+				delete {map::%arg 2%::teleport::*}
+				stop
+		if arg 1 is "list" or "show" or "view":
+			send "&aMAP一覧"
+			loop {maplist::*}:
+				send "&6%loop-value%"
+			stop
+
+#MAPをランダムに選択
+function selectmap() :: string:
+	return random string of {maplist::*}
+#MAPにランダムにTP
+function map_tp(p: player):
+	close {_p}'s inventory
+	teleport {_p} to random location of {map::%{map}%::teleport::*}
+#タイマー
+function reaming_timer(p: players, time: number):
+	set {_bar} to new bossbar
+	set {_progress_number} to {_time}
+	set string of bossbar {_bar} to "&6Remaing Time:&a%{_time}%"
+	set color of bossbar {_bar} to white
+	set style of bossbar {_bar} to solid
+	loop {_p::*}:
+		add loop-value to bossbar {_bar}
+	set {_reaming_time} to {_time}
+	while {_reaming_time} >= 1:
+		wait 1 seconds
+		remove 1 from {_reaming_time}
+		set string of bossbar {_bar} to "&6Remaing Time:&a%{_reaming_time}%"
+		set skellett progress of bossbar {_bar} to {_reaming_time} / {_progress_number}
+		if {game} is false:
+			if {gold_rush} is not set:
+				loop {_p::*}:
+					remove loop-value from bossbar {_bar}
+				stop loop
+			else:
+				loop {_p::*}:
+					remove loop-value from bossbar {_bar}
+				stop loop
+	loop {_p::*}:
+		remove loop-value from bossbar {_bar}
+
+#MAP未完成
+command /ranking:
+	trigger:
+		set {_high} to 0
+		loop {ranking::*}:
+			set {_list::%loop-index%} to loop-value
+		loop 15 times:
+			loop {_list::*}:
+				loop-value-2 > {_high}
+				set {_high} to loop-value-2
+				set {_highplayer} to loop-index
+			message "&6%loop-number%位&e%{_highplayer}%&6さんの&a%{_high}%XP！"
+			set {_high} to 0
+			delete {_list::%{_highplayer}%}
+#ranking
+on damage of player:
+	if {game} is true:
+		if attacker is {oni}:
+			if attacker has iron sword:
+				if {nage} is true:
+					create_corpses(victim)
+					remove victim from {aliveplayer::*}
+					if {players} is 1:
+						set {game} to false
+						set {ending} to true
+						delete {time.%{timenum}%}
+						set victim's gamemode to spectator
+						broadcast "{@s} イノセントが全滅した、&cMurder&6の勝利"
+						sound(all players, "entity.wolf.howl")
+						wait 1 seconds
+						broadcast "&5===================================================="
+						broadcast "    &6今回のMurder          &6Murderを倒した人"
+						broadcast "        &c%{oni}%               いませんでした"
+						add 30 to {ranking::%attacker%}
+						add 30 to {xp.%attacker%}
+						add 30 to {money.%attacker%}
+						add 1 to {kill.%attacker%}
+						if {players} >= 15:
+							add 20 to {ranking::%attacker%}
+							add 20 to {xp.%attacker%}
+							send "&6追加ボーナス!! &a+20XP" to attacker
+						loop {member::*}:
+							if {win.%loop-value%} is "murder":
+								add 15 to {xp.%loop-value%}
+								send "&3&l賭けに勝ちました！！ &f&a(+15XP)" to loop-value
+						wait 5 seconds
+						execute console command "/stopgame"
+						stop
+					if victim is {dete}:
+						broadcast "{@s} &bDetective&6が倒された"
+						set {deteis} to "&cDead"
+						sound(all players, "entity.creeper.hurt")
+						set victim's gamemode to spectator
+						remove 1 from {players}
+						set {death.%victim%} to true
+						drop bow at location of victim
+						rs({member::*})
+						stop
+					if victim is {havebow}:
+						broadcast "{@s} &c%victim%&6が弓を落とした"
+						delete {havebow}
+						drop bow at location of victim
+					set victim's gamemode to spectator
+					remove 1 from {players}
+					set {death.%victim%} to true
+					set action bar of all players to "&c%victim%が倒された、残り&a%{players}%&c人"
+					sound(all players, "entity.hostile.hurt")
+					message "&a+5xp" to attacker
+					add 5 to {ranking::%attacker%}
+					add 5 to {xp.%attacker%}
+					add 5 to {money.%attacker%}
+					add 1 to {kill.%attacker%}
+					rs({member::*})
+					stop
+			else:
+				cancel event
+				stop
+		if attacker's tool is iron sword:
+			if attacker is {oni}:
+				create_corpses(victim)
+				remove victim from {aliveplayer::*}
+				if {players} is 1:
+					set {game} to false
+					set {ending} to true
+					delete {time.%{timenum}%}
+					set victim's gamemode to spectator
+					broadcast "{@s} イノセントが全滅した、&cMurder&6の勝利"
+					sound(all players, "entity.wolf.howl")
+					wait 1 seconds
+					broadcast "&5===================================================="
+					broadcast "    &6今回のMurder          &6Murderを倒した人"
+					broadcast "         &c%{oni}%                   いませんでした"
+					add 30 to {ranking::%attacker%}
+					add 30 to {xp.%attacker%}
+					add 1 to {kill.%attacker%}
+					loop {member::*}:
+						if {win.%loop-value%} is "murder":
+							add 15 to {xp.%loop-value%}
+							send "&3&l賭けに勝ちました！！ &f&a(+15XP)" to loop-value
+					wait 5 seconds
+					execute console command "/stopgame"
+					stop
+				if victim is {dete}:
+					broadcast "{@s} &bDetective&6が倒された"
+					set {deteis} to "&cDead"
+					sound(all players, "entity.creeper.hurt")
+					set victim's gamemode to spectator
+					remove 1 from {players}
+					set {death.%victim%} to true
+					drop bow at location of victim
+					rs({member::*})
+					stop
+				if victim is {havebow}:
+					broadcast "{@s} &c%victim%&6が弓を落とした"
+					delete {havebow}
+					drop bow at location of victim
+				set victim's gamemode to spectator
+				remove 1 from {players}
+				set {death.%victim%} to true
+				set action bar of all players to "&c%victim%が倒された、残り&a%{players}%&c人"
+				sound(all players, "entity.hostile.hurt")
+				message "&a+5xp" to attacker
+				add 5 to {ranking::%attacker%}
+				add 5 to {xp.%attacker%}
+				add 5 to {money.%attacker%}
+				add 1 to {kill.%attacker%}
+				rs({member::*})
+		if projectile is arrow:
+			if attacker is victim:
+				cancel event
+				stop
+			if victim is {oni}:
+				if {2damage} is true:
+					broadcast "{@s} &cMurderがダメージを負った"
+					execute console command "/playsound entity.skeleton.death ambient @a ~ ~ ~ 1 0.8 1"
+					loop 40 times:
+						set {_portallocY} to random integer between -2 and 2
+						set {_portallocZX} to random integer between -1 and 6
+						show 200 PORTAL particles at victim offset by {_portallocZX}, {_portallocY}, {_portallocZX}
+					set {2damage} to false
+					if {sin.%victim%} or {sin2.%victim%} or {sin3.%victim%} is true:
+						execute console command "/effect @a minecraft:glowing 5"
+					message "&a+20xp" to attacker
+					add 20 to {ranking::%attacker%}
+					add 20 to {xp.%attacker%}
+					add 20 to {money.%attacker%}
+					map_tp(victim)
+					stop
+				set {game} to false
+				set {ending} to true
+				delete {time.%{timenum}%}
+				broadcast "{@s} &aMurderを倒した！イノセントの勝ち"
+				set {korosita} to attacker
+				set victim's gamemode to spectator
+				sound(all players, "entity.player.levelup")
+				wait 1 seconds
+				broadcast "&5===================================================="
+				broadcast "    &6今回のMurder          &6Murderを倒した人"
+				broadcast "      &c%{oni}%                 &a%{korosita}%"
+				message "&a+15xp" to attacker
+				add 15 to {ranking::%attacker%}
+				add 15 to {xp.%attacker%}
+				add 15 to {money.%attacker%}
+				add 1 to {kill.%attacker%}
+				send "&a+10xp" to {allplayer::*}
+				loop {member::*}:
+					if {win.%loop-value%} is "innocent":
+						add 5 to {xp.%loop-value%}
+						send "&3&l賭けに勝ちました！！ &f&a(+5XP)" to loop-value
+				wait 5 seconds
+				execute console command "/stopgame"
+				stop
+			if attacker is {oni}:
+				create_corpses(victim)
+				remove victim from {aliveplayer::*}
+				if {players} is 1:
+					set {game} to false
+					set {ending} to true
+					delete {time.%{timenum}%}
+					set victim's gamemode to spectator
+					broadcast "{@s} イノセントが全滅した、&cMurder&6の勝利"
+					sound(all players, "entity.wolf.howl")
+					wait 1 seconds
+					broadcast "&5===================================================="
+					broadcast "    &6今回のMurder         &6Murderを倒した人"
+					broadcast "         &c%{oni}%               いませんでした"
+					add 30 to {ranking::%attacker%}
+					add 30 to {xp.%attacker%}
+					add 1 to {kill.%attacker%}
+					if {players} >= 15:
+						add 20 to {ranking::%attacker%}
+						add 20 to {xp.%attacker%}
+						send "&6追加ボーナス!! &a+20XP"
+					loop {member::*}:
+						if {win.%loop-value%} is "murder":
+							add 15 to {xp.%loop-value%}
+							send "&3&l賭けに勝ちました！！ &f&a(+15XP)" to loop-value
+					wait 5 seconds
+					execute console command "/stopgame"
+					stop
+				if victim is {dete}:
+					broadcast "{@s} &bDetective&6が倒された"
+					delete {dete}
+					set {dete} to "&cDead"
+					set victim's gamemode to spectator
+					remove 1 from {players}
+					sound(all players, "entity.creeper.hurt")
+					set {death.%victim%} to true
+					drop bow at location of victim
+					rs({member::*})
+					stop
+				if victim is {havebow}:
+					broadcast "{@s} &c%victim%&6が弓を落とした"
+					delete {havebow}
+					drop bow at location of victim
+				set victim's gamemode to spectator
+				remove 1 from {players}
+				set {death.%victim%} to true
+				set action bar of all players to "&c%victim%が倒された、残り&a%{players}%&c人"
+				sound(all players, "entity.hostile.hurt")
+				message "&a+5xp" to attacker
+				add 5 to {ranking::%attacker%}
+				add 5 to {xp.%attacker%}
+				add 5 to {money.%attacker%}
+				add 1 to {kill.%attacker%}
+				rs({member::*})
+			else:
+				broadcast "{@s} &5誤射：&6攻撃者→&3%attacker% &6犠牲者→&c%victim%"
+				if victim is {dete}:
+					broadcast "{@s} &bDetective&6が倒された"
+					delete {dete}
+					set {dete} to "&cDead"
+					drop bow at location of victim
+				if victim is {havebow}:
+					broadcast "{@s} &c%victim%&6が弓を落とした"
+					delete {havebow}
+					drop bow at location of victim
+				create_corpses(victim)
+				create_corpses(attacker)
+				remove 2 from {players}
+				remove victim from {aliveplayer::*}
+				remove attacker from {aliveplayer::*}
+				set victim's gamemode to spectator
+				set attacker's gamemode to spectator
+				remove 10 from {ranking::%attacker%}
+				remove 10 from {xp.%attacker%}
+				remove 10 from {money.%attacker%}
+				send "&c-10xp" to attacker
+				send "{@s} &cMurderではなかったようだ..." to attacker
+				sound(attacker, "entity.wither.spawn")
+				rs({member::*})
+				if {players} is 0:
+					set {game} to false
+					set {ending} to true
+					delete {time.%{timenum}%}
+					broadcast "{@s} 村人が村人を倒してしまった、Murderの勝利"
+					wait 8 seconds
+					execute console command "/stopgame"
+					stop
+		else:
+			cancel event
+	else if {gold_rush} is true:
+		stop
+	else:
+		cancel event
+
+#GOLD RUSH
+on damage of player:
+	{gold_rush} is true
+	if attacker is {oni}:
+		add 5 + {rush_bonus_chance.%attacker%} to {rush_total.%attacker%}
+		send "&a+%5 + {rush_bonus_chance.%attacker%}%" to attacker
+		teleport victim to random location of {map::%{map}%::teleport::*}
+		add 10 to victim's health
+		stop
+	else if {member::*} contain victim:
+		if victim is not {oni}:
+			cancel event
+			stop
+		victim is {oni} 
+		set damage delay of victim to 0 tick
+		play sound "entity.experience_orb.pickup" with volume 0.5 and pitch 1.9 at attacker for attacker
+		add 1 + {rush_bonus_chance.%attacker%} to {rush_total.%attacker%}
+		send "&a+%1+ {rush_bonus_chance.%attacker%}%" to attacker
+		if victim's health <= 5:
+			add 10 to victim's health
+		stop
+		
+#したい
+function create_corpses(p: player):
+	create citizen named "&c%{_p}%" at location of {_p} as a PLAYER
+	set {_npc_id} to last created citizen id
+	death_player({_p})
+	wait 1 tick
+	make citizen with id {_npc_id} to sleep
+	#change citizen {_npc_id} skin to "Flux"
+	add {_npc_id} to {corpses::*}
+	if {mvp.%{_p}%} or {vip.%{_p}%} is true:
+		if {death_msg.%{_p}%} is set:
+			create hologram "%{death_msg.%{_p}%}%" at location of block 2 above {_p} for 15 seconds
+
+function delete_corpses():
+	loop {corpses::*}:
+		remove citizen loop-value
+	delete {corpses::*}
+
+function death_player(p: player):
+	if {mapcreator::%{_p}%} is set:
+		send "&6MAP制作をする<command:/mapcreator tp>" to {_p}
+
+command /shop:
+	trigger:
+		{member::*} do not contain player
+		open chest with 1 row named "&aSHOP" to player
+		set slot 0 of player's current inventory to eye of ender named "&5心眼" with lore "&6※マーダー専用スキル" and "&6弓を右クリするとイノセントを発光させます"
+		set slot 2 of player's current inventory to feather named "&bスピード" with lore "&6金を取るとスピードが付きます"
+		set slot 4 of player's current inventory to gold nugget named "&eラッキー" with lore "&6試合開始時に確率で金がもらえます"
+		set slot 6 of player's current inventory to glowing gold ingot named "&eゴールドラッシュ" with lore "&6ゴールドラッシュの確率を上げれます" with lore "&6なおゴールドラッシュの確率は&l(プレイヤーの人数 + ゴールドラッシュボーナス)%%&rとなってます"
+		set slot 8 of player's current inventory to arrow named "&2ショット" with lore "&6矢を放ったときのスピードが上昇します。 (/shot on|offでオンオフが可能です"
+
+on inventory click:
+	name of player's current inventory contain "SHOP"
+	cancel event
+	if {bonus_gold_chance_shop.%player%} is not set:
+		set {bonus_gold_chance_shop.%player%} to 1
+	if name of clicked item contain "スピード":
+		open chest with 1 row named "&bスピード" to player
+		set slot 0 of player's current inventory to feather named "&cLv1 &e({@speed_1_price}Money)"
+		set slot 1 of player's current inventory to feather named "&cLv2 &e({@speed_2_price}Money)"
+		set slot 2 of player's current inventory to feather named "&cLv3 &e({@speed_3_price}Money)"
+		set slot 0 of player's current inventory to feather named "&aLv1" if {speed_1.%player%} is true
+		set slot 1 of player's current inventory to feather named "&aLv2" if {speed_2.%player%} is true
+		set slot 2 of player's current inventory to feather named "&aLv3" if {speed_3.%player%} is true
+#Luck
+	if name of clicked item contain "ラッキー":
+		open chest with 1 row named "&eラッキー" to player
+		set slot 0 of player's current inventory to gold nugget named "&cLv1 &e({@luck_1_price}Money)"
+		set slot 1 of player's current inventory to gold nugget named "&cLv2 &e({@luck_2_price}Money)"
+		set slot 2 of player's current inventory to gold nugget named "&cLv3 &e({@luck_3_price}Money)"
+		set slot 0 of player's current inventory to gold nugget named "&aLv1" if {luck_1.%player%} is true
+		set slot 1 of player's current inventory to gold nugget named "&aLv2" if {luck_2.%player%} is true
+		set slot 2 of player's current inventory to gold nugget named "&aLv3" if {luck_3.%player%} is true
+#心眼
+	if name of clicked item contain "心眼":
+		open chest with 1 row named "&5心眼" to player
+		set slot 0 of player's current inventory to eye of ender named "&cLv1 &e({@sin_1_price}Money)"
+		set slot 1 of player's current inventory to eye of ender named "&cLv2 &e({@sin_2_price}Money)"
+		set slot 2 of player's current inventory to eye of ender named "&cLv3 &e({@sin_3_price}Money)"
+		set slot 0 of player's current inventory to eye of ender named "&aLv1" if {sin_1.%player%} is true
+		set slot 1 of player's current inventory to eye of ender named "&aLv2" if {sin_2.%player%} is true
+		set slot 2 of player's current inventory to eye of ender named "&aLv3" if {sin_3.%player%} is true
+#SHOT
+	if name of clicked item contain "ショット":
+		open chest with 1 row named "&5ショット" to player
+		set slot 0 of player's current inventory to bow named "&cLv1 &e({@shot_1_price}Money)"
+		set slot 1 of player's current inventory to bow named "&cLv2 &e({@shot_2_price}Money)"
+		set slot 2 of player's current inventory to bow named "&cLv3 &e({@shot_3_price}Money)"
+		set slot 0 of player's current inventory to bow named "&aLv1" if {shot_1.%player%} is true
+		set slot 1 of player's current inventory to bow named "&aLv2" if {shot_2.%player%} is true
+		set slot 2 of player's current inventory to bow named "&aLv3" if {shot_3.%player%} is true
+#Gold Rush
+	if name of clicked item contain "ゴールドラッシュ":
+		open chest with 1 row named "&eゴールドラッシュ" to player
+		set slot 4 of player's current inventory to glowing gold ingot named "&aLv%{bonus_gold_chance.%player%} + 1% &e(%1000 * {bonus_gold_chance_shop.%player%}%Money)" #Lvの部分注意
+#Grand Horse
+	if name of clicked item contain "グランドホース":
+		open chest with 1 row named "&4グランドホース" to player
+		set slot 4 of player's current inventory to diamond horse armor named "&4グランドホース" with lore "&e({@grand_horse_price}Money)"
+		set slot 4 of player's current inventory to diamond horse armor named "&4グランドホース" with lore "&a開放済み" if {grand_horse.%player%} is true
+
+on inventory click:
+	if name of player's current inventory contain "スピード":
+		cancel event
+		if name of clicked item contain "Lv1":
+			if {speed_1.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@speed_1_price}:
+				send "&cお金が&3%{@speed_1_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&bSpeed Lv1&6を開放しました！"
+			set {speed_1.%player%} to true
+			remove {@speed_1_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv2":
+			if {speed_1.%player%} is not true:
+				send "&c先にLv1を開放してください"
+				close player's inventory
+				stop
+			if {speed_2.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@speed_2_price}:
+				send "&cお金が&3%{@speed_2_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&bSpeed Lv2&6を開放しました！"
+			set {speed_2.%player%} to true
+			remove {@speed_2_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv3":
+			if {speed_2.%player%} is not true:
+				send "&c先にLv2を開放してください"
+				close player's inventory
+				stop
+			if {speed_3.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@speed_3_price}:
+				send "&cお金が&3%{@speed_3_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&bSpeed Lv3&6を開放しました！"
+			set {speed_3.%player%} to true
+			remove {@speed_3_price} from {money.%player%}
+			close player's inventory
+			stop
+#LUCK
+	if name of player's current inventory contain "ラッキー":
+		cancel event
+		if name of clicked item contain "Lv1":
+			if {luck_1.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@luck_1_price}:
+				send "&cお金が&3%{@luck_1_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&bLuck Lv1&6を開放しました！"
+			set {luck_1.%player%} to true
+			remove {@luck_1_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv2":
+			if {luck_1.%player%} is not true:
+				send "&c先にLv1を開放してください"
+				close player's inventory
+				stop
+			if {luck_2.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@luck_2_price}:
+				send "&cお金が&3%{@luck_2_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&bLuck Lv2&6を開放しました！"
+			set {luck_2.%player%} to true
+			remove {@luck_2_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv3":
+			if {luck_2.%player%} is not true:
+				send "&c先にLv2を開放してください"
+				close player's inventory
+				stop
+			if {luck_3.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@luck_3_price}:
+				send "&cお金が&3%{@luck_3_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&bLuck Lv3&6を開放しました！"
+			set {luck_3.%player%} to true
+			remove {@luck_3_price} from {money.%player%}
+			close player's inventory
+			stop
+#しんがん
+	if name of player's current inventory contain "心眼":
+		cancel event
+		if name of clicked item contain "Lv1":
+			if {sin_1.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@sin_1_price}:
+				send "&cお金が&3%{@sin_1_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&5心眼 Lv1&6を開放しました！"
+			set {sin_1.%player%} to true
+			remove {@sin_1_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv2":
+			if {sin_1.%player%} is not true:
+				send "&c先にLv1を開放してください"
+				close player's inventory
+				stop
+			if {sin_2.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@sin_2_price}:
+				send "&cお金が&3%{@sin_2_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&5心眼 Lv2&6を開放しました！"
+			set {sin_2.%player%} to true
+			remove {@sin_2_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv3":
+			if {sin_2.%player%} is not true:
+				send "&c先にLv2を開放してください"
+				close player's inventory
+				stop
+			if {sin_3.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@sin_3_price}:
+				send "&cお金が&3%{@sin_3_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&5心眼 Lv3&6を開放しました！"
+			set {sin_3.%player%} to true
+			remove {@sin_3_price} from {money.%player%}
+			close player's inventory
+			stop
+#Shot
+	if name of player's current inventory contain "ショット":
+		cancel event
+		if name of clicked item contain "Lv1":
+			if {shot_1.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@shot_1_price}:
+				send "&cお金が&3%{@shot_1_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&2ショット Lv1&6を開放しました！"
+			set {shot_1.%player%} to true
+			set {shot.%player%} to true
+			add 1 to {shotspeed.%player%}
+			remove {@shot_1_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv2":
+			if {shot_1.%player%} is not true:
+				send "&c先にLv1を開放してください"
+				close player's inventory
+				stop
+			if {shot_2.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@shot_2_price}:
+				send "&cお金が&3%{@shot_2_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&2ショット Lv2&6を開放しました！"
+			set {shot_2.%player%} to true
+			add 2 to {shotspeed.%player%}
+			remove {@shot_2_price} from {money.%player%}
+			close player's inventory
+			stop
+		if name of clicked item contain "Lv3":
+			if {shot_2.%player%} is not true:
+				send "&c先にLv2を開放してください"
+				close player's inventory
+				stop
+			if {shot_3.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@shot_3_price}:
+				send "&cお金が&3%{@shot_3_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&2ショット Lv3&6を開放しました！"
+			set {shot_3.%player%} to true
+			add 3 to {shotspeed.%player%}
+			remove {@shot_3_price} from {money.%player%}
+			close player's inventory
+			stop
+#Gold RUSH
+	if name of player's current inventory contain "ゴールドラッシュ":
+		cancel event
+		if name of clicked item contain "Lv":
+			if {money.%player%} <= 1000 * {bonus_gold_chance_shop.%player%}:
+				send "&cお金が&3%1000 * {bonus_gold_chance_shop.%player%} - {money.%player%}%&cMoney足りません！"
+				stop
+			remove 1000 * {bonus_gold_chance_shop.%player%} from {money.%player%}
+			add 1 to {bonus_gold_chance.%player%} #ボーナスチャンス
+			add 1 to {bonus_gold_chance_shop.%player%} #値段上げる
+			broadcast "&e%player%が&6ゴールドラッシュの確率を&e&l%{bonus_gold_chance.%player%}%%%&r&6あげました！"
+			broadcast "&e%player%&6がサーバー内にいるとゴールドラッシュの確率が&5&l%{bonus_gold_chance.%player%} + 1%%%&6上がります"
+			close player's inventory
+			stop
+#Grand Horse
+	if name of player's current inventory contain "グランドホース":
+		cancel event
+		if name of clicked item contain "グランドホース":
+			if {grand_horse.%player%} is true:
+				send "&c既に開放済みです"
+				close player's inventory
+				stop
+			if {money.%player%} <= {@grand_horse_price}:
+				send "&cお金が&3%{@grand_horse_price} - {money.%player%}%&cMoney足りません！"
+				stop
+			broadcast "&e%player%が&4グランドホース&6を開放しました！"
+			set {grand_horse.%player%} to true
+			remove {@grand_horse_price} from {money.%player%}
+			close player's inventory
+			stop
+	
+#死亡判定処理
+on rightclick with iron sword:
+	set {nage} to true
+	{timers.%player%::throwingknife} is not set
+	play raw sound "ENTITY_ARROW_SHOOT" at player with pitch 1.2 and volume 1.5
+	set {_loc} to location 1.5 meter above location of player
+	spawn an armor stand at location sin(90-pitch of player*-1)*0.4 meter below location cos(90-pitch of player*-1)*0.4 meter horizontal forwards location 0.75 meter below location 0.1875 meter horizontal to the right location 0.3 meter backwards location 1 meter forwards location 1.5 meter above location of player
+	add "{NoGravity:1b,Invisible:1b,Marker:1b,Small:1b,Rotation:[%yaw of player%f,0f],Pose:{Head:[90f,%pitch of player*-1+45%f,90f]}}" to nbt of last spawned armor stand
+	wait 1 tick
+	add "{ArmorItems:[{},{},{},{id:""minecraft:iron_sword"",Count:1b,Damage:0s}]}" to nbt of last spawned armor stand
+	set {knife::%UUID of last spawned armor stand%} to {_loc}
+	set {knifeage.%UUID of last spawned armor stand%} to 200
+	set {knifeshooter.%UUID of last spawned armor stand%} to player
+	set {timers.%player%::throwingknife} to 400
+function getEntityFromUUID(uuid: text) :: entity:
+	loop all entities:
+		if UUID of loop-entity is "%{_uuid}%":
+			return loop-entity
+			stop loop
+every tick:
+	if {time.%{timenum}%} is set:
+		if {gold_rush} is true:
+			if floor(unix timestamp of now) >= {time.%{timenum}%}:
+				delete {time.%{timenum}%}
+				delete {gold_rush}
+				send title "&e&lGOLD RUSH ENDED!!" to all players for 2 seconds
+				loop {allplayer::*}:
+					add {rush_total.%loop-value%} to {money.%loop-value%}
+					send "&e+%{rush_total.%loop-value%}% Money" to loop-value
+					delete {rush_total.%loop-value%}
+				add {rush_total.%{oni}%} to {money.%{oni}%}
+				send "&e+%{rush_total.%{oni}%}% Money" to {oni}
+				delete {rush_total.%{oni}%}
+				sound(all players, "entity.firework.launch")
+				wait 3 seconds
+				delete {gold_rush}
+				delete {rush_total_murder}
+				delete {rush_total_innocent}
+				execute console command "/stopgame"
+				stop
+		floor(unix timestamp of now) = {time.%{timenum}%} - 120:
+			if {timea0} is not set:
+				set {timea0} to true
+				broadcast "{@s} 残り2分"
+		floor(unix timestamp of now) = {time.%{timenum}%} - 60:
+			if {timea1} is not set:
+				set {timea1} to true
+				broadcast "{@s} 残り1分"
+		floor(unix timestamp of now) = {time.%{timenum}%} - 30:
+			if {timea2} is not set:
+				set {timea2} to true
+				broadcast "{@s} 残り30秒"
+		floor(unix timestamp of now) = {time.%{timenum}%} - 10:
+			if {timea3} is not set:
+				set {timea3} to true
+				broadcast "{@s} 残り10秒"
+				wait 5 seconds
+				broadcast "{@s} 5"
+				wait 1 seconds
+				broadcast "{@s} 4"
+				wait 1 seconds
+				broadcast "{@s} 3"
+				wait 1 seconds
+				broadcast "{@s} 2"
+				wait 1 seconds
+				broadcast "{@s} 1"
+				wait 1 seconds
+	if floor(unix timestamp of now) >= {time.%{timenum}%}:
+		delete {time.%{timenum}%}
+		set {game} to false
+		broadcast "{@s} タイムアップ、Innocentの勝利"
+		sound(all players, "entity.skeleton_horse.death")
+		wait 1 seconds
+		broadcast "&5===================================================="
+		broadcast "   &6今回のMurder          &6Murderを倒した人"
+		broadcast "        &c%{oni}%           いませんでした"
+		loop {allplayer::*}:
+			add 10 to {ranking::%loop-value%}
+			add 10 to {xp.%loop-value%}
+			send "&a+10xp" to loop-value
+		wait 5 seconds
+		execute console command "/stopgame"
+		stop
+	if {ser} is true:
+		if number of all players >= 2:
+			set {ser} to false
+			wait 3 seconds
+			execute console command "/start"
+	loop {knife::*}:
+		{knifeage.%loop-index%} >= 1
+		set {_knife} to entity from uuid loop-index
+		set {_nohitblocks::*} to 0, 6, 8, 9, 10, 11, 30, 31, 32, 36, 37, 38, 39, 40, 50, 51, 55, 63, 65, 68, 69, 70, 72, 76, 77, 93, 94, 131, 143, 147, 148, 149, 150, 175 and 425
+		loop 12 times:
+			set {knife::%loop-index%} to location 0.25 meter forwards {knife::%loop-index%}
+			teleport {_knife} to location sin(90-pitch of {knife::%loop-index%}*-1)*0.4 meter below location cos(90-pitch of {knife::%loop-index%}*-1)*0.4 meter horizontal forwards location 0.7 meter below location 0.1875 meter horizontal to the right location 0.3 meter backwards {knife::%loop-index%}
+			loop living entities in radius 0.5 around {_knife}:
+				loop-entity is not armor stand
+				loop-entity is not {knifeshooter.%loop-index%}
+				if loop-entity is a player:
+					loop-entity's gamemode is survival or adventure
+					make {knifeshooter.%loop-index%} damage loop-entity by 6
+					delete {knife::%loop-index%}
+					delete {knifeage.%loop-index%}
+					delete {knifeshooter.%loop-index%}
+					kill {_knife}
+				else if loop-entity is not a player:
+					make {knifeshooter.%loop-index%} damage loop-entity by 6
+					delete {knife::%loop-index%}
+					delete {knifeage.%loop-index%}
+					delete {knifeshooter.%loop-index%}
+					kill {_knife}
+			if {_nohitblocks::*} do not contain id of block at location 0.3 meter forwards {knife::%loop-index%}:
+				play raw sound "ENTITY_ZOMBIE_ATTACK_IRON_DOOR" at {knife::%loop-index%} with pitch 2 and volume 1.5
+				play raw sound "ENTITY_ITEM_BREAK" at {knife::%loop-index%} with pitch 2 and volume 1.5
+				delete {knife::%loop-index%}
+				delete {knifeage.%loop-index%}
+				delete {knifeshooter.%loop-index%}
+				delayKill({_knife}, 60)
+		remove 1 from {knifeage.%loop-index%}
+		{knifeage.%loop-index%} is 0
+		delete {knife::%loop-index%}
+		delete {knifeage.%loop-index%}
+		delete {knifeshooter.%loop-index%}
+		kill {_knife}
+	loop all players:
+		{timers.%loop-player%::throwingknife} >= 1
+		remove 1 from {timers.%loop-player%::throwingknife}
+		if loop-player's tool is iron sword:
+			send action bar from "&e投げナイフが使用可能になるまであと%ceil({timers.%loop-player%::throwingknife}/20)%秒" to loop-player
+		{timers.%loop-player%::throwingknife} is 0
+		delete {timers.%loop-player%::throwingknife}
+		send action bar from "&e投げナイフが使用可能になりました" to loop-player
+		set {nage} to false
+function delayKill(e: entity, delay: number):
+	if {_delay} is 0:
+		kill {_e}
+	else:
+		loop {_delay} times:
+			wait 1 tick
+		kill {_e}
+#投げナイフ
+#damage処理
+every {@gold_spawn_time}:
+	{game} is true
+	drop gold ingot at {map::%{map}%::gold_spawn::*}
+	stop
+on pick up of gold ingot:
+	if {speed_3.%player%} is true:
+		apply speed 2 to player for 3 seconds
+	else if {speed_2.%player%} is true:
+		apply speed 2 to player for 2 seconds
+	else if {speed_1.%player%} is true:
+		apply speed 2 to player for 1 seconds
+	add 1 to {xp.%player%}
+	add 1 to {money.%player%}
+	if number of all gold ingot in player's inventory is greater than 8:
+		if player do not have bow:
+			chance of 30%:
+				give arrow to player
+				message "{@s} &e&lラッキー☆矢が二つ手に入った" to player
+				command "/playsound entity.cat.ambient ambient %player% ~ ~ ~ 1 2"
+			give bow to player
+			give arrow to player
+			wait 2 tick
+			remove 10 gold ingot from player's inventory
+			command "/playsound item.armor.equip_diamond ambient %player% ~ ~ ~ 1 1"
+			stop
+		if player has bow:
+			give arrow to player
+			wait 2 tick
+			remove 10 gold ingot from player's inventory
+
+on rightclick holding gold ingot:
+	if number of all gold ingot in player's inventory is greater than 9:
+		#if player is {oni}:
+			#give diamond horse armor named "&4グランドホース" to player
+		if player do not have bow:
+			chance of 30%:
+				give arrow to player
+				message "{@s} &e&lラッキー☆矢が二つ手に入った" to player
+				command "/playsound entity.cat.ambient ambient %player% ~ ~ ~ 1 2"
+			give bow to player
+			give arrow to player
+			wait 2 tick
+			remove 10 gold ingot from player's inventory
+			command "/playsound item.armor.equip_diamond ambient %player% ~ ~ ~ 1 1"
+			stop
+		if player has bow:
+			give arrow to player
+			wait 2 tick
+			remove 10 gold ingot from player's inventory
+
+on rightclick holding bow:
+	player is {oni}
+	broadcast "&cMurderが心眼を発動させた！"
+	remove held item from player's inventory
+	if {sin_1.%player%} is true:
+		loop all players:
+			loop-player is not {oni}
+			command "/effect %loop-player% glowing 3"
+	if {sin_2.%player%} is true:
+		loop all players:
+			loop-player is not {oni}
+			command "/effect %loop-player% glowing 5"
+	if {sin_3.%player%} is true:
+		loop all players:
+			loop-player is not {oni}
+			command "/effect %loop-player% glowing 8"
+
+on entity shot:
+	{shot_3.%player%} or {shot_2.%player%} or {shot_1.%player%} is true
+	{shot.%player%} is true
+	if {shot_3.%player%} is true:
+		shoot arrow at speed {shotspeed.%player%} - 2.5
+		remove 1 arrow from player's inventory
+		cancel event
+		stop
+	if {shot_2.%player%} is true:
+		shoot arrow at speed {shotspeed.%player%}
+		remove 1 arrow from player's inventory
+		cancel event
+		stop
+	if {shot_1.%player%} is true:
+		shoot arrow at speed {shotspeed.%player%}
+		remove 1 arrow from player's inventory
+		cancel event
+		stop
+
+command /shot [<text>]:
+	trigger:
+		if arg 1 is "on":
+			set {shot.%player%} to true
+			send "&aSHOTをオンにしました"
+		if arg 1 is "off":
+			set {shot.%player%} to false
+			send "&cSHOTをオフにしました"
+
+#pickup
+on pick up of bow:
+	if player is {oni}:
+		cancel event
+		stop
+	if player has bow:
+		cancel event
+		stop
+	broadcast "{@s} &a%player%&6が&bDetective&6の弓を拾った"
+	set {havebow} to player
+	give arrow to player
+on pick up of arrow:
+	if player is {oni}:
+		cancel event
+		stop
+on drop:
+	if player is not op:
+		cancel event
+#Detective bow pick up
+on Skript start:
+	execute console command "/difficulty 0"
+	if {ser} is false:
+		set {ser} to true
+		set {re} to true
+on skript stop:
+	set {ser} to false
+	set {re} to false
+#auto start
+function timelimit():
+	if {time.%{timenum}%} is not set:
+		add 1 to {timenum}
+		set {time.%{timenum}%} to floor(unix timestamp of now) + {@timeover}
+		stop
+	if {time.%{timenum}%} is set:
+		delete {time.%{timenum}%}
+		add 1 to {timenum}
+		set {time.%{timenum}%} to floor(unix timestamp of now) + {@timeover}
+		stop
+	else:
+		send "&cTime limit Error &5Unixnow%floor(unix timestamp of now)% &6%{time.%{timenum}%}%" to ops
+
+function gold_rush_time():
+	if {time.%{timenum}%} is not set:
+		add 1 to {timenum}
+		set {time.%{timenum}%} to floor(unix timestamp of now) + {@gold_rush_time}
+		stop
+	if {time.%{timenum}%} is set:
+		delete {time.%{timenum}%}
+		add 1 to {timenum}
+		set {time.%{timenum}%} to floor(unix timestamp of now) + {@gold_rush_time}
+		stop
+	else:
+		send "&cTime limit Error &5Unixnow%floor(unix timestamp of now)% &6%{time.%{timenum}%}%" to ops
+#time limit
+function rs(p: player):
+	if {game} is true:
+		wipe {_p}'s sidebar
+		set name of sidebar of {_p} to "&5&lMurder Mystery"
+		set score "&6&lSisoPixel" in sidebar of {_p} to 1
+		set score "" in sidebar of {_p} to 2
+		set score "&bDetective: %{deteis}%" in sidebar of {_p} to 3
+		set score "" in sidebar of {_p} to 4
+		set score "&d生存者: &a%{players}%" in sidebar of {_p} to 5
+		set score "" in sidebar of {_p} to 6
+		set score "&eRole: %{Role.%{_p}%}%" in sidebar of {_p} to 7
+		set score "" in sidebar of {_p} to 8
+		stop
+	else:
+		wipe {_p}'s sidebar
+		set name of sidebar of {_p} to "&e&lしその鯖"
+		set score "&6&lSisoPixel" in sidebar of {_p} to 1
+		set score "" in sidebar of {_p} to 2
+		set score "&eGold Rush Chance &6&l%gold_rush_chance()%%%" in sidebar of {_p} to 3
+		set score "&bDetective Chance &6&l%round(murder_chance({_p}, ""detective""))%%%" in sidebar of {_p} to 4
+		set score "&cMurder Chance &6&l%round(murder_chance({_p}, ""murder""))%%%" in sidebar of {_p} to 5
+		set score "" in sidebar of {_p} to 6
+		set score "Lv: &b&l%{lv.%{_p}%}%" in sidebar of {_p} to 7
+		set score "Money: &e&l%{money.%{_p}%}%" in sidebar of {_p} to 8
+		set score "XP: &a&l%{xp.%{_p}%}%" in sidebar of {_p} to 9
+		set score "Kills: &c&l%{kill.%{_p}%}%" in sidebar of {_p} to 10
+		set score "&b===Your Status===" in sidebar of {_p} to 11
+		set score "" in sidebar of {_p} to 12
+#sidebar
+function lvup(p: player):
+	set {_p} tab name to "&6&l[&a&lLv%{lv.%{_p}%}%&6&l] &f%{_p}%"
+	if {lv.%{_p}%} >= 20:
+		set {_p} tab name to "&6&l[&b&lLv%{lv.%{_p}%}%&6&l] &f%{_p}%"
+	if {lv.%{_p}%} >= 25:
+		set {_p} tab name to "&6&l[&3&lLv%{lv.%{_p}%}%&6&l] &f%{_p}%"
+	if {lv.%{_p}%} >= 30:
+		set {_p} tab name to "&6&l[&d&lLv%{lv.%{_p}%}%&6&l] &f%{_p}%"
+	if {lv.%{_p}%} >= 40:
+		set {_p} tab name to "&6&l[&d&lLv%{lv.%{_p}%}%&6&l] &f%{_p}% &6&l[Legend]"
+	while {xp.%{_p}%} >= {nextlv.%{_p}%}:
+		wait 2.5 tick
+		play sound "entity.player.levelup" with volume 0.8 and pitch 0.7 at {_p} for {_p}
+		set {nextlv.%{_p}%} to {nextlv.%{_p}%} * 1.2
+		add 1 to {lv.%{_p}%}
+		send "&aLvUP!! &l%{lv.%{_p}%}%Lv" to {_p}
+		set {send.%{_p}%} to true
+	if {send.%{_p}%} is true:
+		send "&6次のレベルまで &5&l""%{nextlv.%{_p}%}%XP""" to {_p}
+		set {_p} tab name to "&6&l[&a&lLv%{lv.%{_p}%}%&6&l] &f%{_p}%"
+		set {send.%{_p}%} to false
+function sound(p: players, sound: text, pitch: number = 1):
+	loop {_p::*}:
+		play sound {_sound} with volume 1 and pitch {_pitch} at loop-value for loop-value
+#Sound
+function murder_chance(p: player, murder_or_dete: text) :: number:
+	if {_murder_or_dete} is "murder":
+		loop all players:
+			add {onichance::%loop-player%} to {_rate_murder}
+		return {onichance::%{_p}%} / {_rate_murder} * 100
+	if {_murder_or_dete} is "detective":
+		loop all players:
+			add {detechance::%loop-player%} to {_rate_dete}
+		return {detechance::%{_p}%} / {_rate_dete} * 100
+			
+#lvup
+on leftclick holding bow:
+	if player is {oni}:
+		if player is sneaking:
+			if {sin.%player%} is true:
+				remove 1 of held item from player
+				execute console command "/effect @a minecraft:glowing 2"
+				broadcast "{@s} &cMurderが心眼を使った！"
+				stop
+			if {sin2.%player%} is true:
+				remove 1 of held item from player
+				execute console command "/effect @a minecraft:glowing 4"
+				broadcast "{@s} &cMurderが心眼を使った！"
+				stop
+			if {sin3.%player%} is true:
+				remove 1 of held item from player
+				execute console command "/effect @a minecraft:glowing 8"
+				broadcast "{@s} &cMurderが心眼を使った！"
+				stop
+#心眼skill
+function luck(p: player):
+	if {luck_3.%{_p}%} is true:
+		chance of 70%:
+			give 4 gold ingot to {_p}
+		stop
+	if {luck_2.%{_p}%} is true:
+		chance of 70%:
+			give 3 gold ingot to {_p}
+		stop
+	if {luck_1.%{_p}%} is true:
+		chance of 70%:
+			give 2 gold ingot to {_p}
+		stop
+#↑skill
+on first join:
+	set {xp.%player%} to 0
+	set {lv.%player%} to 1
+	set {kill.%player%} to 0
+	set {money.%player%} to 0
+	set {nextlv.%player%} to 10
+	set {onichance::%player%} to 1
+	set {detechance::%player%} to 1
+	wait 3 tick
+	set player's gamemode to adventure
+	teleport player to {lobby}
+	broadcast "&e%player%&6さんが&d初参加&6しました"
+	add "&e%player% &6IP &a%ip of player%" to {iplog::*}
+	set player tab name to "&6&l[&a&lLv%{lv.%player%}%&6&l] &f%player%"
+on join:
+	if {men} is true:
+		loop 10 times:
+			execute console command "/playsound entity.enderdragon.ambient master siso_ ~ ~ ~ 1 1 1"
+	delete {c.%player%}
+	remove player from {nojoin::*}
+	set {nojoin.%player%} to "off"
+	broadcast "&e%player%&6さんが参加しました"
+	rs(player)
+	command "/clear %player%"
+	set player's gamemode to adventure
+	teleport player to {lobby}
+	set player tab name to "&6&l[&a&lLv%{lv.%player%}%&6&l] &f%player%"
+	rank_flight(player, "on")
+	give skull of player to player
+	loop all players:
+		set tab header to "&5&lMurder Mystery" and footer to "&6&lSisoPixel &a%number of all players%&7/15" for loop-player
+on quit:
+	delete {win.%player%}
+	if {nojoin::*} contain player:
+		remove player from {nojoin::*}
+		set {nojoin.%player%} to "off"
+	if {ending} is true:
+		wait 5 tick
+		loop all players:
+			set tab header to "&5&lMurder Mystery" and footer to "&6&lSisoPixel &a%number of all players%&7/15" for loop-player
+			stop
+		stop
+	if player is {oni}:
+		broadcast "&6&lMurderが抜けたので強制終了します、※ゲーム中にサーバーを抜けるのは控えてください"
+		wait 3 seconds
+		execute console command "/stopgame"
+	if {allplayer::*} contain player:
+		if {death.%player%} is true:
+			remove player from {member::*}
+		else:
+			remove 1 from {players}
+			remove 1 from {member::*}
+			wait 3 tick
+			if {players} is 0:
+				broadcast "{@s} イノセントがいなくなったのでマーダーの勝ち。"
+				wait 3 seconds
+				execute console command "/stopgame"
+	wait 5 tick
+	loop all players:
+		set tab header to "&5&lMurder Mystery" and footer to "&6&lSisoPixel &a%number of all players%&7/15" for loop-player
+
+on citizen right click:
+	if npc named is "&6&lGrand Horse":
+		if player is {oni}:
+			if number of all gold ingot in player's inventory >= 10:
+				give diamond horse armor named "&4グランドホース" to player
+				send "&b右クリックで使用できます"
+				stop
+			else:
+				send "&c金が10個必要です"
+				stop
+		else:
+			send "&cMurder以外使用できません"
+			stop
+
+on rightclick holding diamond horse armor:
+	stop #廃止
+	name of player's held item contain "グランドホース"
+	remove player's held item from player
+	spawn a skeleton horse at player
+	set tamer of last spawned entity to player
+	equip last spawned entity with a saddle
+	set rf max hp of last spawned entity to 80
+	heal last spawned entity
+	Add "{Attributes:[{Name:generic.movementSpeed,Base:0.5}]}" To nbt of last spawned entity
+	add "{kitpvp:horse}" to nbt of last spawned entity
+	set {_kill_horse} to last spawned entity
+	wait 20 seconds
+	send "&c残り10秒で馬が削除されます"
+	wait 10 seconds
+	kill {_kill_horse}
+				
+	
+on connect:
+	if minecraft version is "1.8" or "1.8.8" or "1.8.9":
+		if player is not op:
+			kick the player due to "&c1.9以下のバージョンを検知しました、サーバーに参加するには1.9以上のクライアントを使用してください。" 
+			stop
+#quit join first join
+#ガチャ
+command /name [<text>] [<text>]:
+	trigger:
+		if arg 1 is "bow" or "sword":
+			if arg 1 is "bow":
+				if {vip.%player%} or {mvp.%player%} is true:
+					if {bowname::*} contain arg 2:
+						send "&6その名前は既にあります"
+						stop
+					if {ngward::*} contain arg 2:
+						send "&6その言葉は使用できません"
+						stop
+					add colored arg 2 to {bowname::*}
+					add "&e%player% &f%colored arg 2%" to {bownamelog::*}
+					broadcast """%colored arg 2%&f""&6がDetectiveの弓の名前に選ばれるようになりました！！"
+					broadcast "&6追加者 &e(%player%)"
+					stop
+				else:
+					send "&c使用するにはVIPかMVPを購入してください"
+					stop
+			if arg 1 is "sword":
+				if {vip.%player%} or {mvp.%player%} is true:
+					if {swordname::*} contain arg 2:
+						send "&6その名前は既にあります"
+						stop
+					if {ngward::*} contain arg 2:
+						send "&6その言葉は使用できません"
+						stop
+					add colored arg 2 to {swordname::*}
+					add "&e%player% &f%colored arg 2%" to {swordnamelog::*}
+					broadcast "&f""%colored arg 2%&f""&6がMurderの剣の名前に選ばれるようになりました！！"
+					broadcast "&6追加者 &e(%player%)"
+					stop
+				else:
+					send "&c使用するにはVIPかMVPを購入してください"
+					stop
+			else:
+				send "&c使用するにはVIPかMVPを購入してください"
+				stop
+		else:
+			if {vip.%player%} or {mvp.%player%} is true:
+				send "&6/name (bow/sword/nick) (text)"
+				stop
+command /remove [<text>] [<text>]:
+	permission: skript.admin
+	trigger:
+		if arg 1 is "bow" or "sword":
+			if arg 1 is "bow":
+				loop {bowname::*}:
+					if loop-value contain arg 2:
+						remove loop-value from {bowname::*}
+						remove loop-value from {bownamelog::*}
+						send "&cdeleted %colored arg 2%"
+						stop
+					else:
+						send "&6その名前は存在しません"
+						stop
+				stop
+			if arg 1 is "sword":
+				loop {swordname::*}:
+					if loop-value contain arg 2:
+						remove loop-value from {swordname::*}
+						remove loop-value from {swordnamelog::*}
+						send "&cdeleted %colored arg 2%"
+						stop
+					else:
+						send "&6その名前は存在しません"
+						stop
+				stop
+		else:
+			send "&a/remove &6(bow/sword) &5(text)"
+			stop
+command /nick [<text>]:
+	trigger:
+		if arg 1 is not set:
+			if {mvp.%player%} is true:
+				send "&a/nick &6(ニックネーム)"
+				stop
+			else:
+				send "&c使用するにはMVPを購入してください"
+				stop
+		if arg 1 is "check":
+			loop all players:
+				{nick.%loop-player%} is set
+				send "&e%loop-player% %{nick.%loop-player%}%"
+			stop
+		if arg 1 is set:
+			if {mvp.%player%} is true:
+				if {ngnick::*} contain arg 1:
+					send "&6その言葉は使用できません"
+					stop
+				set {nick.%player%} to colored arg 1
+				send "&6ニックネームを""%colored arg 1%&f""&6にしました"
+				send "&6/unnickでニックネームをリセットできます"
+				send "&c[opmsg] &e%player%&6がニックネームを%arg 1%&6に変更しました" to ops
+				set {nicklog.%player%} to "&e%player% &f%{nick.%player%}%"
+				add {nicklog.%player%} to {nicklog::*}
+				stop
+			else:
+				send "&c使用するにはMVPを購入してください"
+				stop
+command /deathmessage [<text>]:
+	trigger:
+		if arg 1 is not set:
+			if {mvp.%player%} or {vip.%player%} is true:
+				send "&a/nick &6(ニックネーム)"
+				stop
+			else:
+				send "&c使用するにはMVP又はVIPを購入してください"
+				stop
+		if arg 1 is set:
+			if {mvp.%player%} or {vip.%player%} is true:
+				set {death_msg.%player%} to colored arg 1
+				send "&6死亡したときのホログラムを%arg 1%にしました"
+				send "&e%player%が&6死亡したときのホログラムを%arg 1%にしました" to ops
+				stop
+function rank_flight(p: player, mode: text):
+	if {_mode} is "on":
+		{mvp.%{_p}%} or {vip.%{_p}%} is true
+		set flight mode of {_p} to true
+		stop
+	if {_mode} is "off":
+		{mvp.%{_p}%} or {vip.%{_p}%} is true
+		set flight mode of {_p} to false
+		stop
+command /rankhelp:
+	trigger:
+		send "&6=======RANK HELP========="
+		send "&3/nick (文字)でニックネームを変更できます (MVP)"
+		send "&3/name (sword|bow) (文字)で弓と剣の名前を追加できます (MVP|VIP)"
+		send "&3/deathmessage (文字)で死亡したときにホログラムを表示することができます (MVP|VIP)"
+		send "&9チャットしたときに頭上にチャットした文字が表示されます (MVP|VIP)"
+		send "&9ロビーで空が飛べるようになります (MVP|VIP)"
+		stop
+on leaves decay:
+	cancel event
+#add name & nick
+command /unnick [<player>]:
+	trigger:
+		if arg 1 is not set:
+			if {mvp.%player%} is true:
+				delete {nick.%player%}
+				send "&6ニックネームをリセットしました"
+				stop
+			else:
+				send "&cMVPを購入してください"
+				stop
+		if arg 1 is set:
+			if player is op:
+				delete {nick.%arg 1%}
+				send "&6%arg 1%のニックネームをリセットしました"
+				stop
+			else:
+				send "&c管理者以外使用できません"
+				stop
+#unnick
+command /ng [<text>] [<text>]:
+	permission: skript.admin
+	trigger:
+		if arg 1 is "add":
+			if arg 2 is set:
+				if {ngward::*} contain arg 2:
+					send "&c既にその言葉は登録されています"
+					stop
+				add arg 2 to {ngward::*}
+				send """%arg 2%""&6をNGワードとして登録しました"
+				stop
+			else:
+				send "&6/ng (add/remove) (text)"
+				stop
+		if arg 1 is "nick":
+			if arg 2 is set:
+				if {ngnick::*} contain arg 2:
+					send "&c既にその言葉は登録されています"
+					stop
+				add arg 2 to {ngnick::*}
+				send "&6%arg 2%をNGワードとして登録しました"
+				stop
+			else:
+				send "&6/ng (add/remove) (text)"
+				stop
+		if arg 1 is "remove":
+			if arg 2 is set:
+				if {ngward::*} do not contain arg 2:
+					send "&cその言葉は登録されていません"
+					stop
+				remove arg 2 from {ngward::*}
+				send "&6%arg 2%をNGワードから削除しました"
+				stop
+			else:
+				send "&6/ng (add/remove) (text)"
+				stop
+		if arg 1 is "removenick":
+			if arg 2 is set:
+				if {ngnick::*} do not contain arg 2:
+					send "&cその言葉は登録されていません"
+					stop
+				remove arg 2 from {ngnick::*}
+				send "&6%arg 2%をNGワードから削除しました"
+				stop
+			else:
+				send "&6/ng (add/remove) (text)"
+				stop
+		else:
+			send "&6/ng (add/remove) (text)"
+			stop
+#NGward
+on rightclick holding paper:
+	remove 1 of held item from player
+	remove paper from player's inventory
+	set {vip.%player%} to true
+	broadcast "&e%player%&6さんが&a&lVIP&f&6になりました！"
+	send "&6/nameが使えるようにようになりました！"
+	add "&e%player% &a[VIP]" to {buylog::*}
+	wait 5 seconds
+	broadcast "&6VIPになるとMurderの剣の名前とDetectiveが持つ弓の名前を決められます！"
+	broadcast "&6MVPになると/nickが使えます！"
+	stop
+command /vip [<player>]:
+	executable by: console
+	trigger:
+		add "&e%arg 1% &a[VIP]" to {buylog::*}
+command /mvp [<player>]:
+	executable by: console
+	trigger:
+		add "&e%arg 1% &b[MVP]" to {buylog::*}
+on rightclick holding diamond:
+	remove 1 of held item from player
+	remove paper from player's inventory
+	set {mvp.%player%} to true
+	broadcast "&e%player%&6さんが&b&lMVP&f&6になりました！"
+	send "&6/nickが使用できます"
+	add "&e%player% &b[MVP]" to {buylog::*}
+	wait 5 seconds
+	broadcast "&6VIPになるとMurderの剣の名前とDetectiveが持つ弓の名前を決められます！"
+	broadcast "&6MVPになると/nickが使えます！"
+	stop
+#VIP MVP
+on chat:
+	if message contain {nonono::*}:
+		replace all "%{nonono::*}%" with "&6&l I love sisopixel" in message
+		stop
+	if {mvp.%player%} is true:
+		bind hologram "&6&l[&bMVP&6]" to player for 3 seconds offset by 0, 3, 0
+		bind hologram message to player for 3 seconds offset by 0, 2.5, 0
+		stop
+	if {vip.%player%} is true:
+		bind hologram "&6&l[&aVIP&6]" to player for 3 seconds offset by 0, 3, 0
+		bind hologram message to player for 3 seconds offset by 0, 2.5, 0
+		stop
+on chat:
+	if message is "siso_" or "siso_AZ" or "運営":
+		loop 10 times:
+			wait 1 tick
+			command "/playsound block.anvil.place master siso_AZ ~ ~ ~ 1 1 1"
+			command "/playsound block.anvil.place master siso_ ~ ~ ~ 1 1 1"
+			stop
+	if {ending} is true:
+		if message contain "gg":
+			{gg.%player%} is true
+			add 5 to {xp.%player%}
+			send "&d+5XP"
+			delete {gg.%player%}
+	if {nick.%player%} is set:
+		cancel event
+		broadcast "%{nick.%player%}%&f: &f%message%"
+		stop
+#chat system
+command /log [<text>]:
+	permission: skript.admin
+	trigger:
+		if arg 1 is "nick":
+			send "&6nicklog" to player
+			loop {nicklog::*}:
+				send "%loop-value%" to player
+		if arg 1 is "bow":
+			send "&bbow namelog"
+			loop {bownamelog::*}:
+				send "%loop-value%"
+		if arg 1 is "sword":
+			send "&csword namelog"
+			loop {swordnamelog::*}:
+				send "%loop-value%"
+		if arg 1 is "ng":
+			send "&2NGward list"
+			loop {ngward::*}:
+				send "%loop-value%"
+		if arg 1 is "rank":
+			send "&ebuy Rank"
+			loop {buylog::*}:
+				send "%loop-value%"
+		if arg 1 is "asure":
+			send "&6アスレ"
+			loop {asure::*}:
+				send "%loop-value%"
+		if arg 1 is "ip":
+			if name of player is "siso_" or "siso_AZ":
+				loop {iplog::*}:
+					send "%loop-value%"
+			else:
+				send "&cオーナー以外実行できません"
+on command:
+	if command is "sk reload scripts" or "skript reload scripts" or "sk list" or "skript list" or "sk reload all" or "skript reload all":
+		if name of player is not "siso_" or "siso_AZ":
+			send "&cオーナー以外実行できません"
+			stop
+
+on right click on player:
+	entity is npc 3349
+	if player's gamemode is not spectator:
+		broadcast "&e%player%&6さんがロビーのアスレをクリアしました！！ &a+150XP"
+		add 150 to {xp.%player%}
+		add "&6アスレクリア &e%player%" to {asure::*}
+		teleport player to {lobby}
+		rs(player)
+		stop
+	else:
+		send "&cNice Try" to player
+		stop
+on right click on player:
+	entity is npc 1919
+	if player's gamemode is not spectator:
+		broadcast "&e%player%&6さんがロビーの地下アスレをクリアしました！！ &a+100XP"
+		add "&6アスレクリア &e%player%" to {asure::*}
+		add 100 to {xp.%player%}
+		teleport player to {lobby}
+		rs(player)
+		stop
+	else:
+		send "&cNice Try" to player
+		stop
+every 15 minutes:
+	execute console command "/me 私たちのDiscord→ https://discord.gg/PXtdk5Q"
+	broadcast "&6ランクを買うと様々な特典が付きます！！ 詳細は/rankhelp"
+	broadcast "&6/status (プレイヤー)で成績が確認できます。"
+on rightclick holding paper:
+	name of held item contains "ログインボーナス"
+	remove 1 of held item from player
+	broadcast "&e%player%&6さんがログインボーナスを受け取りました！！"
+	chance of 30%:
+		add 50 to {xp.%player%}
+		send "&eラッキー &a+50XP"
+		rs(player)
+		stop
+	add 30 to {xp.%player%}
+	send "+30XP"
+	rs(player)
+on death of player:
+	send "&c予期せぬエラー &e%victim%" to ops
+	force victim to respawn
+	teleport victim to {lobby}
+command /opmsg <text>:
+	trigger:
+		send "&e%player% &c[opmsg] &f%arg%" to ops
+command /nojoin:
+	trigger:
+		if {nojoin.%player%} is not set:
+			set {nojoin.%player%} to "on"
+			send "&cゲームに参加しないように設定しました"
+			add player to {nojoin::*}
+			stop
+		if {nojoin.%player%} is "on":
+			set {nojoin.%player%} to "off"
+			send "&aゲームに参加するように設定しました"
+			if {nojoin::*} contain player:
+				remove player from {nojoin::*}
+			stop
+		if {nojoin.%player%} is "off":
+			set {nojoin.%player%} to "on"
+			send "&cゲームに参加しないように設定しました"
+			if {nojoin::*} contain player:
+				remove player from {nojoin::*}
+			stop
+command /addxp <player> <number>:
+	permission: skript.admin
+	trigger:
+		if arg 1 is set:
+			if arg 2 is set:
+				if name of player is "siso_" or "siso_AZ":
+					add arg 2 to {stats.%arg 1%.xp}
+					broadcast "&e%player%&9さんが&b%arg 1%&9さんの所持xpを&a%arg 2%xp&9増やしました。"
+					rs(arg 1)
+					stop
+				else:
+					send "&6オーナー以外実行できません"
+command /removexp <player> <number>:
+	permission: skript.admin
+	trigger:
+		if arg 1 is set:
+			if arg 2 is set:
+				if name of player is "siso_" or "siso_AZ":
+					remove arg 2 from {stats.%arg 1%.xp}
+					broadcast "&e%player%&9さんが&b%arg 1%&9さんの所持xpを&c%arg 2%xp&9減らしました。"
+					rs(arg 1)
+					stop
+				else:
+					send "&6オーナー以外実行できません"
+command /status [<offline player>]:
+	trigger:
+		if arg 1 is not set:
+			send "=======&9%player% Status&f======="
+			send "&6Lv:%{lv.%player%}%"
+			send "&aXP:%{xp.%player%}%"
+			send "&eMoney:%{money.%player%}%"
+			send "&cKill:%{kill.%player%}%"
+			send "&5NextLv:%{nextlv.%player%}%"
+			stop
+		else if arg-1 has not played before:
+			send "&cそのプレイヤーはこのサーバーに参加したことがありません"
+			stop
+		else:
+			send "=======&9%arg 1% Status&f======="
+			send "&6Lv:%{lv.%arg 1%}%"
+			send "&aXP:%{xp.%arg 1%}%"
+			send "&eMoney:%{money.%arg 1%}%"
+			send "&cKill:%{kill.%arg 1%}%"
+			send "&5NextLv:%{nextlv.%arg 1%}%"
+			stop
+on right click on player:
+	{game} is not true
+	all players contain clicked player
+	send "=======&9%clicked player% Status&f=======" to event-player
+	send "&6Lv:%{lv.%clicked player%}%" to event-player
+	send "&aXP:%{xp.%clicked player%}%" to event-player
+	send "&eMoney:%{money.%clicked player%}%" to event-player
+	send "&cKill:%{kill.%clicked player%}%" to event-player
+	send "&5NextLv:%{nextlv.%clicked player%}%" to event-player
+	stop	
+
+command /murder:
+	trigger:
+		send "&3=============&5&lMurder-Mystery&f&3==============="
+		send "&6このゲームはイノセントとマーダーに分かれて戦います"
+		send "&6イノセントはマップに落ちてる金を10集め、弓と交換します"
+		send "&6その弓でマーダーを倒せばイノセントの勝ちです"
+		send "&6マーダーは剣でイノセントを全員倒しましょう"
+		stop
+command /displayname [<player>] [<text>]:
+	permission: skript.admin
+	trigger:
+		if arg 1 is not set:
+			message "&a&o/displayname &e(player) &5(text)"
+			stop
+		if arg 1 is set:
+			if arg 2 is "reset" or "delete" or "remove":
+				set the arg 1's display name to "%arg 1%"
+				message "&e%arg 1%のチャットの書式をリセットしました"
+				stop
+		if arg 1 is set:
+			if arg 2 is set:
+				if name of player is "siso_" or "siso_AZ":
+					set the arg 1's display name to colored arg 2
+					message "&e%arg 1%&6のチャットの書式を%arg 2%&6に変更しました"
+					stop
+				else:
+					send "&6オーナー以外使用できません"
+on walking on note block:
+	if {game} is false:
+		push the player upwards at speed 2.9
+on damage of pig:
+	cancel event
+on damage of villager:
+	cancel event
+on damage of sheep:
+	cancel event
+on damage of chicken:
+	cancel event
+on right click on sheep:
+	execute console command "/tellraw %player% {""text"":""\u3053\u3053\u3092\u30af\u30ea\u30c3\u30af\u3067\u6295\u7968"",""bold"":true,""color"":""green"",""clickEvent"":{""action"":""run_command"",""value"":""/vote""}}"
+command /rezxisvote [<text>]:
+	executable by: console
+	trigger:
+		add 100 to {money.%arg 1%}
+		add 250 to {xp.%arg 1%}
+		broadcast "&e&l%arg 1%さんが投票しました！ &a&l(+100 Money & 250XP) &6/voteで投票できます！！"
+on right click on pig:
+	chance of 1%:
+		send "&6&l+20XP" to player
+		add 20 to {xp.%player%}
+		rs(player)
+		stop
+	chance of 50%:
+		send "&a+5XP" to player
+		add 5 to {xp.%player%}
+		rs(player)
+		stop
+	send "&c-5XP" to player
+	remove 5 from {xp.%player%}
+	rs(player)
+	stop
+command /aip <offline player>:
+	trigger:
+		if name of player is "siso_" or "siso_AZ":
+			send ip of arg 1
+		else:
+			send "&6オーナー以外使用できません"
+command /addcoupon [<text>] [<text>] [<number>]:
+	permission: admin
+	trigger:
+		name of player is "siso_" or "siso_AZ"
+		if arg 1 is "add":
+			arg 2 and arg 3 is set
+			add arg 2 to {coupon::*}
+			set {coupon.bonus.%arg 2%} to arg 3
+			send "&aクーポン、%arg 2%を追加しました。&6(%arg 3%)XP"
+			stop
+		if arg 2 is "remove":
+			remove arg 2 from {coupon::*}
+			send "&cクーポン、%arg 2%を削除しました"
+			stop
+
+command /coupon [<text>]:
+	trigger:
+		if {coupon::*} contains arg 1:
+			if {coupon.%arg 1%.%player%} is true:
+				send "&c&lそのクーポンは既に有効化しています！！"
+				stop
+			send "&6&lクーポンを有効化しました！ &a+%{coupon.bonus.%arg 1%}%"
+			play sound "entity.player.levelup" with volume 1 and pitch 1 at player for player
+			add {coupon.bonus.%arg 1%} to {xp.%player%}
+			set {coupon.%arg 1%.%player%} to true
+			stop
+		else:
+			send "&cそのクーポンは存在しません！"
+			stop
+
+on damage of snow golem:
+	cancel event
+on right click on snow golem:
+	{game} is false
+	win(player)
+function win(p: player):
+	#if number of all players - size of {nojoin::*} <= 5:
+		#send "{@s} 人数が6人以上でないと賭けはできません。" to {_p}
+		#stop
+	open chest with 1 row named "&6&lどちらのチームが勝つ？" to {_p}
+	set slot 3 of {_p}'s current inventory to bow named "&a&lInnocent"
+	set slot 5 of {_p}'s current inventory to iron sword named "&c&lMurder"
+	set slot 4 of {_p}'s current inventory to barrier block named "&6当たればXPがもらえます。"
+	if {win.toggle.%{_p}%} is true:
+		set slot 8 of {_p}'s current inventory to glowing pink wool named "&3賭けのトグルを解除する。" with lore "&6賭けのトグル状態を解除します。"
+	else:
+		set slot 8 of {_p}'s current inventory to pink wool named "&3賭けをトグルする。" with lore "&6ゲームが終了した際に自動的にこの画面が表示されます。"
+on inventory click:
+	name of player's current inventory contain "どちらのチームが勝つ？"
+	cancel event
+	if clicked slot is 5:
+		send "{@s} &c&lMurder&f&6に勝利を託しました！"
+		set {win.%player%} to "murder"
+		stop
+	if clicked slot is 3:
+		send "{@s} &a&lInnocent&f&6に勝利を託しました！"
+		set {win.%player%} to "innocent"
+		stop
+	if clicked slot is 8:
+		if {mvp.%player%} or {vip.%player%} is not true:
+			send "&cこの機能を使用するにはランクが必要です"
+			stop
+		if {win.toggle.%player%} is not set:
+			set {win.toggle.%player%} to true
+			send "{@s} 賭けのトグルを&aオン&6にしました。"
+			stop
+		if {win.toggle.%player%} is true:
+			delete {win.toggle.%player%}
+			send "{@s} 賭けのトグルを&cオフ&6にしました。"
+			stop
+#かけ
+
+#遊び
+command /head [<text>]:
+	permission: siso
+	trigger:
+		open chest with 1 row named "Head Menu" to player
+		set slot 0 of player's current inventory to nether star named "&a追加する"
+		set slot 1 of player's current inventory to brick block named "&6編集する"
+		set slot 2 of player's current inventory to barrier block named "&c削除する"
+
+on inventory click:
+	if name of player's current inventory contain "Head Menu":
+		cancel event
+		if name of clicked item contain "追加する":
+			set {chat_head_item.%player%} to true
+			close player's inventory
+			send "&a追加したいアイテムを手にもって ""&6&ladd&a""と入力してください"
+			stop
+		if name of clicked item contain "削除する":
+			open chest with 6 row named "&cHead Delete" to player
+			head_list(player)
+			stop
+		if name of clicked item contain "編集する":
+			open chest with 6 row named "&6Head edit" to player
+			head_list(player)
+			stop
+#Edit
+	if name of player's current inventory is "&6Head edit":
+		cancel event
+		clicked item is set
+		clicked item is not air
+		set {_getlore::*} to lore of clicked item
+		open chest with 1 row named "Head Edited %{_getlore::1}%" to player
+		set slot 0 of player's current inventory to gold nugget named "&e価格設定"
+		set slot 1 of player's current inventory to clicked item named "&6Get HEAD"
+		stop
+	if name of player's current inventory contain "Head Edited ":
+		cancel event
+		if name of clicked item contain "価格設定":
+			set {_get_head_id::*} to name of player's current inventory split at "Head Edited "
+			set {chat_head_price.%player%} to {_get_head_id::2}
+			close player's inventory
+			send "&aチャット欄に価格を設定してください"
+			stop
+		if name of clicked item contain "GET HEAD":
+			set {_get_head_id::*} to name of player's current inventory split at "Head Edited "
+			give {headlist::%{_get_head_id::2}%} to player
+			open chest with 6 row named "&6Head edit" to player
+			head_list(player)
+			stop
+#Delete
+	if name of player's current inventory is "&cHead delete":
+		cancel event
+		clicked item is set
+		clicked item is not air
+		set {_getlore::*} to lore of clicked item
+		open chest with 1 row named "&3Head Del %{_getlore::1}%" to player
+		set slot 2 of player's current inventory to light green wool named "&a削除する"
+		set slot 6 of player's current inventory to red wool named "&cキャンセル"
+		stop
+	if name of player's current inventory contain "&3Head Del":
+		cancel event
+		clicked item is not air
+		if name of clicked item contain "削除する":
+			set {_get_head_id::*} to name of player's current inventory split at "&3Head Del "
+			delete {head_price_%{_get_head_id::2}%}
+			send "&c削除しました (内部的には残っています)"
+			open chest with 6 row named "&6Head edit" to player
+			head_list(player)
+			stop
+		if name of clicked item contain "キャンセル":
+			open chest with 6 row named "&6Head edit" to player
+			head_list(player)
+			send "&cキャンセルしました"
+			stop
+
+function head_list(p: player):
+	set {_loopnum} to 0
+	loop {headlist::*}:
+		set slot {_loopnum} of {_p}'s current inventory to loop-value with lore loop-index
+		add 1 to {_loopnum}
+	stop
+
+function size(obj: objects) :: integer:
+	if {_obj::*} is not set:
+		set {_size} to 0
+		return {_size}
+	loop {_obj::*}:
+		add 1 to {_size}
+	return {_size}
+
+on chat:
+	{chat_head_item.%player%} is true
+	cancel event
+	if player's held item is air:
+		send "&c手にアイテムを持ってください"
+		stop
+	if message do not contain "add":
+		send "&cキャンセルしましました"
+		delete {chat_head_item.%player%}
+		stop
+	set {_set_id} to random 3 char string from `a-z0-9`
+	set {headlist::%{_set_id}%} to player's held item
+	delete {chat_head_item.%player%}
+	open chest with 6 row named "&6Head edit" to player
+	head_list(player)
+	stop
+
+on chat:
+	{chat_head_price.%player%} is set
+	cancel event
+	if message parsed as number is not number:
+		send "&c数字を入力してください"
+		stop
+	if message is "cancel":
+		send "&cキャンセルしました"
+		delete {chat_head_price.%player%}
+		stop
+	set {head_price_%{chat_head_price.%player%}%} to message parsed as number
+	delete {chat_head_price.%player%}
+	send "&a価格を&6%message%&aに設定しました"
+	open chest with 6 row named "&6Head edit" to player
+	head_list(player)
+	stop
+
+#======一般プレイヤー----------
+on rightclick:
+	id of event-item is {@head_select_menu_item_id}
+	open chest with 6 row named "&6Head Select" to player
+	set {_loopnum} to 0
+	loop {headlist::*}:
+		{head_buy_%loop-index%.%player%} is true
+		add "{Head_ID:%loop-index%}" to nbt of loop-value
+		set slot {_loopnum} of player's current inventory to loop-value with lore ""
+		add 1 to {_loopnum}
+	set slot 53 of player's current inventory to barrier block named "&cリセット"
+	stop
+
+#ヘッド装着 & 選択
+on inventory click:
+	name of player's current inventory contain "Head Select"
+	cancel event
+	clicked item is set
+	clicked item is not air
+	if clicked slot is 53:
+		delete {head_selected.%player%}
+		set helmet of player to air
+		send "&cリセットしました"
+		stop
+	set {_get_head_id_nbt::*} to tag "Head_ID" of nbt of clicked item split at """"
+	set helmet of player to {headlist::%{_get_head_id_nbt::2}%} with lore ""
+	set {head_selected.%player%} to {headlist::%{_get_head_id_nbt::2}%}
+	close player's inventory
+	stop
+
+#ヘッドショップ
+command /headshop:  
+	trigger:
+		open chest with 6 row named "&5Head SHOP" to player
+		set {_loopnum} to 0
+		loop {headlist::*}:
+			{head_price_%loop-index%} is set
+			{head_buy_%loop-index%.%player%} is not set
+			add "{Head_ID:%loop-index%}" to nbt of loop-value
+			set slot {_loopnum} of player's current inventory to loop-value with lore "&6金額:&e&l%{head_price_%loop-index%}%"
+			add 1 to {_loopnum}
+		stop
+
+on inventory click:
+	name of player's current inventory contain "Head SHOP"
+	cancel event
+	clicked item is set
+	clicked item is not air
+	set {_get_head_id_nbt::*} to tag "Head_ID" of nbt of clicked item split at """"
+	open chest with 1 row named "&5Head Confirm" to player
+	set slot 2 of player's current inventory to light green wool named "&a購入する" with nbt "{Head_ID:%{_get_head_id_nbt::2}%}" #購入画面で使用
+	set slot 4 of player's current inventory to barrier block named "&6購入内容" with lore "&b金額:%{head_price_%{_get_head_id_nbt::2}%}% &eあなたのお金:&6&l%{@money_variable}%"
+	set slot 6 of player's current inventory to red wool named "&cキャンセル"
+	set name of slot 2 of player's current inventory to "&a購入する"
+	stop
+
+on inventory click:
+	name of player's current inventory contain "Head Confirm"
+	cancel event
+	clicked item is set
+	clicked item is not air
+	if name of clicked item contain "購入する":
+		set {_get_head_id_nbt::*} to tag "Head_ID" of nbt of clicked item split at """"
+		if {head_price_%{_get_head_id_nbt::2}%} is not set:
+			send "&cエラー"
+			close player's inventory
+			stop
+		if {head_price_%{_get_head_id_nbt::2}%} >= {@money_variable}: #お金が足りない場合
+			send "&cお金が&b%{head_price_%{_get_head_id_nbt::2}%} - {@money_variable}%&c足りません！"
+			close player's inventory
+			stop
+		set {head_buy_%{_get_head_id_nbt::2}%.%player%} to true
+		remove {head_price_%{_get_head_id_nbt::2}%} from {@money_variable}
+		send "&a購入しました！！"
+		send "&e%player%&6がHeadを購入しました。 &5%{_get_head_id_nbt::2}%" to ops
+		open chest with 6 row named "&5Head SHOP" to player
+		set {_loopnum} to 0
+		loop {headlist::*}:
+			add "{Head_ID:%loop-index%}" to nbt of loop-value
+			set slot {_loopnum} of player's current inventory to loop-value
+			add 1 to {_loopnum}
+		stop
+
+on command:
+	player is op
+	command contain "sk"
+	broadcast "&3&lSkriptのリロードをします"
+
+#MAPCREATOR
+options:
+	lobby_x: 0 #自鯖のx座標を入力してください
+	lobby_y: 4 #自鯖のy座標を入力してください
+	lobby_z: 0 #自鯖のz座標を入力してください
+	lobby_gamemode: 2 #建築モードから戻った時のゲームモードを設定してください 例:(0 -> サバイバル)
+	
+
+command /mapcreator [<text>] [<text>]:
+	trigger:
+		if {member::*} contain player:
+			send "&cゲーム中は実行できません"
+			stop
+		if arg 1 is "create" or "new":
+			if arg 2 is not set:
+				send "&cMAP名を設定してください"
+				stop
+			if {mapcreator::%player%} is set:
+				send "&cMAPは一人一つまで持てます"
+				stop
+			if {mapcreatorlist::*} contain arg 2:
+				send "&cその名前は既に使用されてます"
+				stop
+			add 1000 to {global_location_x}
+			add 1000 to {global_location_z}
+			add arg 2 to {mapcreatorlist::*}
+			set {mapcreator::%player%} to arg 2
+			set {mapcreator::%player%::location_x} to {global_location_x}
+			set {mapcreator::%player%::location_z} to {global_location_z}
+			set {mapcreator::%arg 2%::creator} to player
+			mapcreator_tp(player, "admin")
+			mapcreator_permissions(player) #PermissionEX
+			set {c.%player%} to true #建築モードかどうか
+			stop
+		if arg 1 is "delete" or "remove":
+			set {_mapcreatorlog_location} to location at ({mapcreator::%player%::location_x}, 4, {mapcreator::%player%::location_z}) in world player's world
+			set {mapcreatorlog::%{mapcreator::%player%}%} to {_mapcreatorlog_location} #IndexにMAP名 valueに座標を保存
+			set {mapcreatorlog_creator::%{mapcreator::%player%}%} to {mapcreator::%{mapcreator::%player%}%::creator} #製作者を保存
+			delete {mapcreator::%player%}
+			delete {c.%player%}
+			send "&cMAPを削除しました。"
+			mapcreator_back(player)
+			stop
+		if arg 1 is "tp" or "teleport":
+			if arg 2 is not set: #自分のMAPへ
+				mapcreator_tp(player, "admin")
+				mapcreator_permissions(player) #PermissionEX
+				stop
+			else if arg 2 parsed as offline player has played on this server before: #プレイヤー名で指定していたら
+				if {map::%arg 2%} is set:
+					mapcreator_tp(player, "common", {map::%arg 2%})
+					stop
+				else:
+					send "&c%arg 2%はMAPを持っていません！"
+					stop
+			else: #MAP名が指定されてたら
+				mapcreator_tp(player, "common", arg 2)
+				stop
+		if arg 1 is "hub" or "back" or "lobby":
+			mapcreator_back(player)
+			stop
+		if arg 1 is "list":
+			player is op
+			loop {mapcreator::*}:
+				send "&e%{mapcreator::%loop-value%::creator}%: &6&l%loop-value%  <command:/tp %player% %{mapcreator::%{mapcreator::%loop-value%::creator}%::location_x}% 4 %{mapcreator::%{mapcreator::%loop-value%::creator}%::location_z}%>&b&lテレポートする"
+			stop
+		if arg 1 is "log":
+			send "&6MAP LOG"
+			loop {mapcreatorlog::*}:
+				send "&e%{mapcreatorlog_creator::%loop-index%}%: &6&l%loop-index%  <command:/mapcreator logtp %loop-index%>&b&lテレポートする"
+			stop
+		if arg 1 is "logtp":
+			if arg 2 is not set:
+				send "&cMAP名を指定してください"
+				stop
+			player is op
+			teleport player to {mapcreatorlog::%arg 2%}
+			stop
+		else:
+			send "&6----MAP Creator----"
+			send "&b/mapcreator (create|new) (mapcreatorname)"
+			send "&b/mapcreator (delete|remove)"
+			send "&b/mapcreator (tp|teleport) [(mapcreatorname)]"
+			send "&b/mapcreator (hub|back|lobby)"
+			stop
+
+function mapcreator_tp(p: player, permission: text, mapcreatorname: text = "none"):
+	if {_permission} is "admin": #MAP主だったら
+		if {_mapcreatorname} is "none": #MAP名が指定されていなかったら
+			if {mapcreator::%{_p}%} is not set: #MAPを持っていなかったら
+				send "&cMAPを持っていません &b/mapcreator new (MAPNAME)で作成してください" to {_p}
+				stop
+			teleport {_p} to location at ({mapcreator::%{_p}%::location_x}, 4, {mapcreator::%{_p}%::location_z}) in world {_p}'s world
+			set gamemode of {_p} to creative
+			set {c.%{_p}%} to true
+			stop
+		if {_mapcreatorname} is not "none": #MAP名が指定されてたら (客としてTPさせるので権限は無し)
+			loop {mapcreator::*}:
+				{mapcreator::%loop-index%} is {_mapcreatorname} #MAP名と一致する項目が見つかったら
+				set {_mapcreator_creator} to loop-index #MAP製作者をゲット
+				stop loop
+			if {_mapcreator_creator} is not set: #MAPが存在しなかったら
+				send "&6%{_mapcreatorname}%&cが見つかりませんでした" to {_p}
+				stop
+			teleport {_p} to location at ({mapcreator::%{_mapcreator_creator}%::location_x}, 4, {mapcreator::%{_mapcreator_creator}%::location_z}) in world {_p}'s world
+			set {_p}'s flight mode to true #adminじゃないので飛べるだけ (c.)もなし
+			set gamemode of {_p} to adventure
+			delete {c.%{_p}%}
+			stop
+	if {_permission} is "common": #MAP主以外だったら
+		if {_mapcreatorname} is "none": #MAP名が指定されていなかったら
+			if {mapcreator::%{_p}%} is not set: #MAPを持っていなかったら
+				send "&cMAPを持っていません &b/mapcreator new (MAPNAME)で作成してください" to {_p}
+				stop
+			teleport {_p} to location at ({mapcreator::%{_p}%::location_x}, 4, {mapcreator::%{_p}%::location_z}) in world {_p}'s world
+			set {_p}'s flight mode to true #adminじゃないので飛べるだけ (c.)もなし
+			set gamemode of {_p} to adventure
+			delete {c.%{_p}%}
+			stop
+		if {_mapcreatorname} is not "none": #MAP名が指定されてたら
+			loop {mapcreator::*}:
+				{mapcreator::%loop-index%} is {_mapcreatorname} #MAP名と一致する項目が見つかったら
+				set {_mapcreator_creator} to loop-index #MAP製作者をゲット
+				stop loop
+			if {_mapcreator_creator} is not set: #MAPが存在しなかったら
+				send "&6%{_mapcreatorname}%&cが見つかりませんでした" to {_p}
+				stop
+			teleport {_p} to location at ({mapcreator::%{_mapcreator_creator}%::location_x}, 4, {mapcreator::%{_mapcreator_creator}%::location_z}) in world {_p}'s world
+			set {_p}'s flight mode to true #adminじゃないので飛べるだけ (c.)もなし
+			set gamemode of {_p} to adventure
+			delete {c.%{_p}%}
+			stop
+
+#change gamemode
+on command:
+	command contain "gamemode"
+	player is not op
+	{c.%player%} is true
+	cancel event
+	set {_args::*} to arguments
+	if {_args::1} contain " ":
+		set {_args::*} to {_args::1} split at " "
+	if {_args::2} is not set:
+		if {_args::1} is "0" or "s" or "survival" or "1" or "c" or "creative" or "2" or "a" or "adventure" or "3" or "sp" or "spectator":
+			if {_args::1} is "0" or "０" or "s" or "survival":
+				set {_gm} to survival
+			if {_args::1} is "1" or "１" or "c" or "I" or "Ｉ" or "ⅰ" or "Ⅰ" or "creative":
+				set {_gm} to creative
+			if {_args::1} is "2" or "２" or "a" or "II" or "ＩＩ" or "ⅱ" or "Ⅱ" or "adventure":
+				set {_gm} to adventure
+			set gamemode of player to {_gm}
+			stop
+		else:
+			send "&cゲームモードを指定してください。"
+			stop
+
+on command:
+	command contain "/"
+	player is not op
+	{c.%player%} is not true
+	cancel event
+	stop
+
+#function list
+function mapcreator_back(p: player):
+	delete {c.%{_p}%}
+	set {_p}'s flight mode to false
+	clear {_p}'s inventory
+	if {lobby} is set:
+		teleport {_p} to {lobby}
+	else:
+		teleport {_p} to location at ({@lobby_x}, {@lobby_y}, {@lobby_z}) in {_p}'s world
+	if {@lobby_gamemode} is 0: #ゲームモード設定
+		set gamemode of {_p} to survival
+	if {@lobby_gamemode} is 1:
+		set gamemode of {_p} to creative
+	if {@lobby_gamemode} is 2:
+		set gamemode of {_p} to adventure
+	if {@lobby_gamemode} is 3:
+		set gamemode of {_p} to spectator
+
+function mapcreator_permissions(p: player): #PermissionEXが必要
+	command "/pex user %{_p}% add worldedit.wand"
+	command "/pex user %{_p}% add worldedit.selection.pos"
+	command "/pex user %{_p}% add worldedit.region.set"
+	command "/pex user %{_p}% add worldedit.region.walls"
+	command "/pex user %{_p}% add worldedit.region.replace"
+	command "/pex user %{_p}% add worldedit.clipboard.copy"
+	command "/pex user %{_p}% add worldedit.clipboard.paste"
+	command "/pex user %{_p}% add worldedit.clipboard.rotate"
+	command "/pex user %{_p}% add worldedit.clipboard.cut"
+	command "/pex user %{_p}% add worldedit.history.undo"
+	command "/pex user %{_p}% add worldedit.history.redo"
+	command "/pex user %{_p}% add worldedit.region.line"
+	command "/pex user %{_p}% add worldedit.region.move"
+	command "/pex user %{_p}% add worldedit.region.smooth"
+	command "/pex user %{_p}% add worldedit.help"
+	command "/pex user %{_p}% add fawe.bypass"
+#クエスト

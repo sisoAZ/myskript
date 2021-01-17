@@ -1,0 +1,3185 @@
+options:
+	server_limit: 5
+
+command /create [<text>]:
+	trigger:
+		if arg 1 is not set:
+			send "&a/create (text)"
+			stop
+		if size({playerdata.%player%::names::*}) >= 3:
+			send "&cサーバーは3つ以上持てません"
+			stop
+		set {_set_server_id} to random 5 char string from `a-z0-9`
+		if {server::name::*} contain arg 1:
+			send "&cエラー、再度お試しください"
+			stop
+		#if {server::id::*} contain {_set_server_id}:
+			#send "&cエラー、再度お試しください"
+			#stop
+		add {_set_server_id} to {server::id::*} #システムデータ
+		add arg 1 to {server::name::*}
+		set {server::%{_set_server_id}%::defaultservername} to arg 1 #IDからサーバーの名前
+		set {server::%arg 1%::id} to {_set_server_id} #サーバー名からID
+		set {server::%{_set_server_id}%::servername} to arg 1 #サーバーの名前を変更した際に使用
+		set {server::%{_set_server_id}%::owner} to player #サーバーオーナーの設定
+		set {server::%{_set_server_id}%::unixtime} to floor(unix timestamp of now) #unix time
+		add player to {server::%{_set_server_id}%::playing::*}
+		set {server.%player%.%{_set_server_id}%::names} to {_set_server_id} #サーバーの名前を記録 (プレイヤーデータ)
+		set {server.%player%.%{_set_server_id}%::defaultservername} to {_set_server_id} #デフォルトサーバーの名前を保存 (プレイヤーデータ)
+		set {server.%player%.%{_set_server_id}%::unixtime} to floor(unix timestamp of now) #サーバーを作成した時間を保存 (プレイヤーデータ)
+		add {_set_server_id} to {playerdata.%player%::ids::*} #Ids
+		add arg 1 to {playerdata.%player%::names::*} #Names
+		#server join flag
+		set {playerdata.%player%::joining} to true
+		set {playerdata.%player%::owner} to true
+		set {playerdata.%player%::joined_server} to {_set_server_id}
+		set {playerdata.%player%::display_name} to arg 1
+		send "&6鯖を作成しました！！ &a(%arg 1%)"
+		send "&e%player% &3Server created &a(%arg 1%)" to ops
+		command "/mv clone Baseworld %{_set_server_id}%"
+		command "/mv tp %player% %{_set_server_id}%"
+		wait 1 tick
+		set player's gamemode to creative
+		clear player's inventory
+		teleport player to location at (0, 4, 0)
+		server_item(player)
+		add_permissions_group(player, {_set_server_id})
+		wait 5 seconds
+		send "&6/backで最初の地点に戻れます"
+		send "&6看板を置くことでチェックポイントが設置できます"
+		if player's world is "world":
+			execute player command "/back"
+			send "&c鯖名に日本語を使用しないでください。"
+			stop
+		stop
+
+#------------------
+#Main Menu
+#------------------
+
+command /mainmenu:
+	trigger:
+		{playerdata.%player%::joined_server} is not set
+		{playerdata.%player%::room::room} is not set
+		main_menu(player)
+
+function main_menu(p: player):
+	open chest with 1 row named "&6&lMain menu" to {_p}
+	if {playerdata.%{_p}%::names::*} is set:
+		set slot 4 of {_p}'s current inventory to compass named "&3サーバー設定"
+		set slot 6 of {_p}'s current inventory to chest named "&aサーバーを作る"
+	else:
+		set slot 4 of {_p}'s current inventory to chest named "&aサーバーを作る"
+	set slot 2 of {_p}'s current inventory to rabbit foot named "&6サーバーを探す"
+	if {room_maintenance} is not true: #asure_room
+		set slot 8 of {_p}'s current inventory to ender chest named "&eマルチプレイ"
+	if {event::open} is true:
+		set slot 0 of {_p}'s current inventory to End Portal Frame named "&a&lイベント開催中！" with lore "&b&l%{event::server::name}%"
+		if {event::lore} is set:
+			set slot 0 of {_p}'s current inventory to End Portal Frame named "&a&lイベント開催中！" with lore "&b&l%{event::server::name}%" and "%{event::lore}%"
+	
+#---------Server create-------
+on inventory click:
+	if name of player's current inventory contain "Main menu":
+		if name of clicked item contain "サーバーを作る":
+			if size({playerdata.%player%::names::*}) >= {@server_limit}:
+				send "&c{@server_limit}つ以上サーバーは持てません"
+				stop
+			if {playerdata.%player%::banned::create} is set:
+				send "&cあなたは現在サーバーを作成できません、理由 -> &4%{playerdata.%player%::banned::create}%"
+				stop
+			close player's inventory
+			open anvil gui named "server_name" with icon paper text "%player%のアスレチック" for player
+			stop
+
+#----------------------
+#Server menu
+#----------------------
+
+on inventory click:
+	if name of player's current inventory contain "Main menu":
+		cancel event
+		if name of clicked item contain "サーバー設定":
+			if {playerdata.%player%::banned::create} is set:
+				send "&cあなたは現在サーバーを作成できません、理由 -> &4%{playerdata.%player%::banned::create}%"
+				stop
+			server_menu(player)
+
+function server_menu(p: player):
+	if size({playerdata.%{_p}%::names::*}) >= 2:
+		open chest with 1 row named "&3Server select" to {_p}
+		set {_loopnum} to 0
+		loop {playerdata.%{_p}%::names::*}:
+			set slot {_loopnum} of {_p}'s current inventory to paper named "&6&l%loop-value%"
+			add 1 to {_loopnum}
+		stop
+	loop {playerdata.%{_p}%::ids::*}:
+		set {playerdata.%{_p}%::select_server} to loop-value
+	open chest with 1 row named "&e%{server::%{playerdata.%{_p}%::select_server}%::servername}% &6server menu" to {_p}
+	set slot 0 of {_p}'s current inventory to name tag named "&aサーバーの名前を変える"
+	set slot 4 of {_p}'s current inventory to wooden door named "&6%{server::%{playerdata.%{_p}%::select_server}%::servername}%に接続する"
+	set slot 8 of {_p}'s current inventory to tnt named "&cサーバーを削除する"
+	stop
+
+#-----Server select----
+on inventory click:
+	if name of player's current inventory contain "Server select":
+		cancel event
+		clicked item is paper
+		name of clicked item is set
+		set {playerdata.%player%::select_server} to {server::%uncolored name of clicked item%::id}
+		open chest with 1 row named "&e%{server::%{playerdata.%player%::select_server}%::servername}% &6server menu" to player
+		set slot 0 of player's current inventory to name tag named "&aサーバーの名前を変える"
+		set slot 4 of player's current inventory to wooden door named "&6%{server::%{playerdata.%player%::select_server}%::servername}%に接続する"
+		set slot 8 of player's current inventory to tnt named "&cサーバーを削除する"
+		stop
+
+#--------Server Search-------
+on inventory click:
+	name of player's current inventory contain "Main menu"
+	cancel event
+	name of clicked item contain "サーバーを探す"
+	show_server_list(player)
+
+#-------Room Menu--------
+on inventory click:
+	name of player's current inventory contain "Main menu"
+	cancel event
+	name of clicked item contain "マルチプレイ"
+	room_menu(player) #asure_room
+
+
+#------------------------
+#Server settings
+#------------------------
+
+on inventory click:
+	if name of player's current inventory contain "Server menu":
+		cancel event
+		if name of clicked item contain "に接続する":
+			{playerdata.%player%::already_clicked} is not set
+			set {playerdata.%player%::already_clicked} to true
+			set gamemode of player to adventure
+			set {_servername} to {playerdata.%player%::select_server} #get server name
+			set {playerdata.%player%::display_name} to {server::%{playerdata.%player%::select_server}%::servername}
+			if {server::%{_servername}%::truery_name} is set:
+				set {_servername} to {server::%{_servername}%::truery_name}
+			set {playerdata.%player%::joined_server} to {_servername}
+			add player to {server::%{_servername}%::playing::*} #サーバーの変数にプレイヤーを追加
+			execute console command "/mv tp %player% %{playerdata.%player%::joined_server}%" #server TP
+			set {playerdata.%player%::joining} to true #player joined
+			rankingbar(player)
+			if "%{_servername}%" parsed as world is not loaded:
+				set_server_location("%{_servername}%") #{_server}がtextと認識されないので””で囲む
+			wait 1 tick  #ワールド間の移動を考慮
+			if {server::%{_servername}%::owner} is player:
+				set {playerdata.%player%::owner} to true
+				if {server::%{_servername}%::relese} is not true:
+					set gamemode of player to creative
+			else:
+				set player's flight mode to false
+			if {server::%{_servername}%::spawn} is set:
+				teleport player to {server::%{_servername}%::spawn}
+			else:
+				teleport player to location at (0, 4, 0) in world "%{_servername}%"
+			if {server::%{_servername}%::ranking::%player%} is set:
+				send "&6%{_servername}%&3のベストタイム&a%{server::%{_servername}%::ranking::%player%}%"
+			if {server::%{_servername}%::owner_time} is set:
+				send "&3サーバーオーナー&e(%{server::%{_servername}%::owner}%)&3のタイム&a%{server::%{_servername}%::owner_time}%"
+			delete {playerdata.%player%::already_clicked}
+			server_item(player)
+			stop
+		if name of clicked item contain "サーバーの名前を変える":
+			close player's inventory
+			open anvil gui named "server_name_change" with icon paper text "%{server::%{playerdata.%player%::select_server}%::servername}%" for player
+			stop
+		if name of clicked item contain "サーバーを削除する":
+			close player's inventory
+			open chest with 1 row named "&c本当にサーバーを削除してよろしいですか？" to player
+			set slot 3 of player's current inventory to light green wool named "&a削除する"
+			set slot 5 of player's current inventory to red wool named "&cキャンセル"
+			stop
+#server delete ok?
+	if name of player's current inventory contain "本当にサーバーを削除してよろしいですか？":
+		cancel event
+		if name of clicked item contain "削除する":
+			loop {server::%{playerdata.%player%::select_server}%::playing::*}: #サーバーから蹴る
+				send "&cオーナーがサーバーを削除しました" to loop-value
+				execute loop-value command "/back"
+			command "/mv delete %{playerdata.%player%::select_server}%" #ワールド削除
+			command "/mv confirm" #削除確認コマンド
+			if size({server::%{playerdata.%player%::select_server}%::goal::*}) >= 1:
+				set {_top_player} to ranking_top({playerdata.%player%::select_server}, "first")
+				remove 1 from {playerdata.%{_top_player}%::global_ranking}
+			remove_permissions_group(player, {playerdata.%player%::select_server})
+			loop {server::%{playerdata.%player%::select_server}%::permission::*}:
+				remove_permissions_group(loop-value, {playerdata.%player%::select_server})
+			#データ消去
+			remove {server::%{playerdata.%player%::select_server}%::servername} from {server::name::*} #サーバーシステムからサーバー名を削除
+			remove {server::%{playerdata.%player%::select_server}%::servername} from {playerdata.%player%::names::*} #プレイヤーデーターのサーバー名リストから除外
+			delete {server::%{playerdata.%player%::select_server}%::permission::*} #権限削除
+			delete {server::%{playerdata.%player%::select_server}%::*} #グローバルサーバーデータ削除
+			delete {server::%{playerdata.%player%::select_server}%::playing::*} #サーバーに参加している変数を収去消去
+			delete {server.%player%.%{playerdata.%player%::select_server}%::ranking::*} #ランキング削除
+			delete {server::%{playerdata.%player%::select_server}%::already_played::*}
+			delete {server::%{playerdata.%player%::select_server}%::goal::*}
+			delete {server::%{playerdata.%player%::select_server}%::comment::*}
+			delete {server::%{playerdata.%player%::select_server}%::comment_holograms::*}
+			delete {server::%{playerdata.%player%::select_server}%::iine::*}
+			loop {save::%{playerdata.%player%::select_server}%::effect_block_number} times:
+				delete {save::%loop-value%::effect_location::*}
+			delete {save::%{playerdata.%player%::select_server}%::effect_block_number}
+			remove {playerdata.%player%::select_server} from {playerdata.%player%::ids::*}
+			delete {server.%player%.%{playerdata.%player%::select_server}%::*} #サーバーデータ削除
+			add "Name:%{playerdata.%player%::select_server}% MCID:%player% Deletetime:%now%" to {log::delete::*}
+			send "&cサーバーを削除しました"
+			close player's inventory
+			stop
+		if name of clicked item contain "キャンセル":
+			close player's inventory
+			stop
+
+#-------------------------------------------
+#Set server name & Server name change sign
+#-------------------------------------------
+
+#-----set name------
+On anvil gui done:
+	set {_anvil_name} to anvil gui name of anvil gui of player
+	if {_anvil_name} is "server_name" or "server_name_change":
+		if length of event-string < 3:
+			send "&cサーバー名は3文字以上にしてください"
+			stop
+		if length of event-string > 30:
+			send "&cサーバー名は30文字以下にしてください"
+			stop
+		if event-string contain "✔":
+			send "&cその文字は使用できません"
+			stop
+		
+		if {_anvil_name} is "server_name":
+			if event-string contain "&":
+				send "&c色は使用できません"
+				stop
+			close anvil gui player's anvil gui
+			execute player command "/create %uncolored event-string%"
+			stop
+		
+		if {_anvil_name} is "server_name_change":
+			send "&aサーバー名を&6(%event-string%)に変更しました。"
+			if {playerdata.%player%::joining} is true:
+				remove {server::%{playerdata.%player%::joined_server}%::servername} from {server::name::*}
+				remove {server::%{playerdata.%player%::joined_server}%::servername} from {playerdata.%player%::name::*}
+				add uncolored event-string to {server::name::*}
+				add uncolored event-string to {playerdata.%player%::name::*}
+				set {server::%{playerdata.%player%::joined_server}%::servername} to event-string
+				set {server::%uncolored event-string%::id} to {playerdata.%player%::joined_server}
+				stop
+			remove {server::%{playerdata.%player%::select_server}%::name} from {server::name::*}
+			remove {server::%{playerdata.%player%::select_server}%::name} from {playerdata.%player%::name::*}
+			add uncolored event-string to {server::name::*}
+			add uncolored event-string to {playerdata.%player%::name::*}
+			set {server::%{playerdata.%player%::select_server}%::servername} to event-string
+			set {server::%uncolored event-string%::id} to {playerdata.%player%::select_server}
+		stop
+
+	if {_anvil_name} is "server_motd":
+		if length of event-string >= 50:
+			send "&cMOTDは50文字以下にしてください。"
+			stop
+		if event-string is "cancel":
+			send "&cキャンセルしました。"
+			stop
+		send "&aMOTDを(%event-string%)に変更しました。"
+		set {server::%{playerdata.%player%::joined_server}%::motd} to colored event-string
+		stop
+	
+	if {_anvil_name} is "search_mcid":
+		wait 1 tick
+		sort_server_details(player, "mcid", event-string)
+		stop
+	
+	if {_anvil_name} is "server_comment":
+		{playerdata.%player%::joined_server} is set
+		set {_comment::*} to colored event-string
+		add_comment({_comment::*}, {playerdata.%player%::joined_server}, location of player's head, player)
+		add "&a&l[通知] &e%player%&6が%{server::%{playerdata.%player%::joined_server}%::servername}%にコメントしました。 &r&d[%{_comment::*}%&d]" to {playerdata.%{server::%{playerdata.%player%::joined_server}%::owner}%::notification::*}
+
+	if {_anvil_name} is "server_comment_reply":
+		{playerdata.%player%::joined_server} is set
+		set {_comment::*} to colored event-string
+		if targeted entity is not hologram:
+			send "&c返信したいホログラムに視点を合わせてください"
+			stop
+		if targeted entity is hologram:
+			set {_location} to location of targeted entity's head
+			add 2 to {_location}'s y-Location
+			add_comment({_comment::*}, {playerdata.%player%::joined_server}, {_location}, player, "reply")
+			add "&a&l[通知] &e%player%&6が%{server::%{playerdata.%player%::joined_server}%::servername}%のコメントに返信しました。 &r&5[%{_comment::*}%&5]" to {playerdata.%{server::%{playerdata.%player%::joined_server}%::owner}%::notification::*}
+
+on chat:
+	if player's world is not "world":
+		if {playerdata.%player%::joined_server} is set:
+			set chat format to "&6[%{playerdata.%player%::display_name}%] &f%player%&a: &f%message%"
+		else if {playerdata.%player%::room::room} is set:
+			set chat format to "&a[%{playerdata.%player%::room::room}%'s Room] &f%player%&a: &f%message%"
+	else if player's world is "world":
+		set chat format to "&3[Lobby] &f%player%&a: &f%message%"
+
+	if message contain "pastebin.com/":
+		cancel event
+		loop all players:
+			if loop-player is "siso_AZ" or "siso_":
+				send message to loop-player
+
+#----------------
+#Show server list
+#----------------
+function show_server_list(p: player):
+	open chest with 6 row named "&a&lServer list" to {_p}
+	inv_sort_set({_p})
+	set {_slots} to 11
+	delete {server.page.%{_p}%::*}
+	loop {server::id::*}:
+		set {server.page.%{_p}%::%loop-value%} to {server::%loop-value%::iine}
+	loop size({server.page.%{_p}%::*}) times:
+		set {_value} to max_iine({_p})
+		delete {server.page.%{_p}%::%{_value}%}
+		{server::%{_value}%::relese} is true
+		if {_slots} is 43 + 1:
+			set slot 53 of {_p}'s current inventory to arrow named "&3Next Page"
+			stop
+		if {_slots} is 17 or 26 or 35:
+			add 3 to {_slots}
+		if {server::%{_value}%::motd} is not set:
+			if {server::%{_value}%::whitelist} is true:
+				set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "&lWhitelist"
+			else if {server::%{_value}%::custom_icon} is set:
+				if {server::%{_value}%::ranked} is true: #if ranked
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else: #if no ranked
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+			else:
+				if {server::%{_value}%::ranked} is true: #if ranked
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞ &3クリア人数&f:&9%size({server::%{_value}%::goal::*})%" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+		else:
+			if {server::%{_value}%::whitelist} is true:
+				set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%" and "&lWhitelist"
+			else if {server::%{_value}%::custom_icon} is set:
+				if {server::%{_value}%::ranked} is true:
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+			else:
+				if {server::%{_value}%::ranked} is true:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+		add 1 to {_slots}
+
+#------iine function------- #いいね順が多いものを返す
+function max_iine(p: player) :: string:
+	loop {server.page.%{_p}%::*}:
+		set {_index::%loop-value%} to loop-index
+	set {_max_index} to max({server.page.%{_p}%::*})
+	return {_index::%{_max_index}%}
+
+#------Next Page System-------
+on inventory click:
+	if name of player's current inventory contain "Old Server list" or "New Server list" or "Ranked Server list" or "Name Server list" or "MCID Server list": #ソートあり (old) (New)
+		if name of clicked item contain "Next Page":
+			inv_sort_set(player)
+			set {_slots} to 11
+			loop {server.page.%player%::*}:
+				{server::%loop-value%::relese} is true
+				#Sort
+				if name of player's current inventory contain "Ranked Server list":
+					if {server::%loop-value%::ranked} is not true:
+						continue
+				
+				if name of player's current inventory contain "MCID Server list":
+					if {server::%loop-value%::owner} is not {_sort_text}:
+						continue
+
+				if {_slots} is 43 + 1:
+					set slot 53 of player's current inventory to arrow named "&3Next Page"
+					stop
+				if {_slots} is 17 or 26 or 35:
+					add 3 to {_slots}
+				if {server::%loop-value%::motd} is not set:
+					if {server::%loop-value%::whitelist} is true:
+						set slot {_slots} of player's current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "&lWhitelist"
+					else if {server::%loop-value%::custom_icon} is set:
+						if {server::%loop-value%::ranked} is true: #if ranked
+							set slot {_slots} of player's current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+						else: #if no ranked
+							set slot {_slots} of player's current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+					else:
+						if {server::%loop-value%::ranked} is true: #if ranked
+							set slot {_slots} of player's current inventory to emerald block named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+						else:
+							set slot {_slots} of player's current inventory to emerald block named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞ &3クリア人数&f:&9%size({server::%loop-value%::goal::*})%" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+				else:
+					if {server::%loop-value%::whitelist} is true:
+						set slot {_slots} of player's current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%" and "&lWhitelist"
+					else if {server::%loop-value%::custom_icon} is set:
+						if {server::%loop-value%::ranked} is true:
+							set slot {_slots} of player's current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+						else:
+							set slot {_slots} of player's current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+					else:
+						if {server::%loop-value%::ranked} is true:
+							set slot {_slots} of player's current inventory to emerald block named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+						else:
+							set slot {_slots} of player's current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+				add 1 to {_slots}
+				delete {server.page.%player%::%loop-index%}
+			stop
+	if name of player's current inventory contain "Server list": #ソートなし
+		if name of clicked item contain "Next Page":
+			inv_sort_set(player)
+			set {_slots} to 11
+			loop size({server.page.%player%::*}) times:
+				set {_value} to max_iine(player)
+				delete {server.page.%player%::%{_value}%}
+				{server::%{_value}%::relese} is true
+				if {_slots} is 43 + 1:
+					set slot 53 of player's current inventory to arrow named "&3Next Page"
+					stop
+				if {_slots} is 17 or 26 or 35:
+					add 3 to {_slots}
+				if {server::%{_value}%::motd} is not set:
+					if {server::%{_value}%::whitelist} is true:
+						set slot {_slots} of player's current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "&lWhitelist"
+					else if {server::%{_value}%::custom_icon} is set:
+						if {server::%{_value}%::ranked} is true: #if ranked
+							set slot {_slots} of player's current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+						else: #if no ranked
+							set slot {_slots} of player's current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+					else:
+						if {server::%{_value}%::ranked} is true: #if ranked
+							set slot {_slots} of player's current inventory to emerald block named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+						else:
+							set slot {_slots} of player's current inventory to emerald block named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞ &3クリア人数&f:&9%size({server::%{_value}%::goal::*})%" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else:
+					if {server::%{_value}%::whitelist} is true:
+						set slot {_slots} of player's current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%" and "&lWhitelist"
+					else if {server::%{_value}%::custom_icon} is set:
+						if {server::%{_value}%::ranked} is true:
+							set slot {_slots} of player's current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+						else:
+							set slot {_slots} of player's current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+					else:
+						if {server::%{_value}%::ranked} is true:
+							set slot {_slots} of player's current inventory to emerald block named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+						else:
+							set slot {_slots} of player's current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+				add 1 to {_slots}
+			stop
+#------sort system--------
+on inventory click:
+	name of player's current inventory contain "Server list"
+#Easy
+	if name of clicked item contain "Easy":
+		sort_server(player, "Easy")
+		stop
+#Normal
+	if name of clicked item contain "Normal":
+		sort_server(player, "Normal")
+		stop
+#Hard
+	if name of clicked item contain "Hard":
+		sort_server(player, "Hard")
+		stop
+#Extra
+	if name of clicked item contain "Extra":
+		sort_server(player, "Extra")
+		stop
+#details Sort
+	if name of clicked item contain "サーバーを細かく探す":
+		open chest with 1 row named "&9Sort server" to player
+		set slot 0 of player's current inventory to redstone torch named "&a新着順"
+		set slot 1 of player's current inventory to lever named "&7古い順"
+		set slot 2 of player's current inventory to gold block named "&b公認マップ"
+		set slot 3 of player's current inventory to name tag named "&d名前順"
+		set slot 4 of player's current inventory to map named "&eMCIDで探す"
+		stop
+#iine
+	if name of clicked item contain "&6サーバーに&d「いいね」&6を付ける":
+		set {playerdata.%player%::iine_select} to true
+		inv_sort_set(player)
+		set {_slots} to 11
+		delete {server.page.%player%::*}
+		loop {server::id::*}:
+			set {server.page.%player%::%loop-value%} to {server::%loop-value%::iine}
+		loop size({server.page.%player%::*}) times:
+			set {_value} to max_iine(player)
+			delete {server.page.%player%::%{_value}%}
+			{server::%{_value}%::relese} is true
+			if {_slots} is 43 + 1:
+				set slot 53 of player's current inventory to arrow named "&3Next Page"
+				stop
+			if {_slots} is 17 or 26 or 35:
+				add 3 to {_slots}
+			if {server::%{_value}%::motd} is not set:
+				if {server::%{_value}%::whitelist} is true:
+					set slot {_slots} of player's current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "&lWhitelist"
+				else if {server::%{_value}%::custom_icon} is set:
+					set slot {_slots} of player's current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else:
+					set slot {_slots} of player's current inventory to emerald block named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+			else:
+				if {server::%{_value}%::whitelist} is true:
+					set slot {_slots} of player's current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%" and "&lWhitelist"
+				else if {server::%{_value}%::custom_icon} is set:
+					set slot {_slots} of player's current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else:
+					set slot {_slots} of player's current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+			add 1 to {_slots}
+		set slot 1 of player's current inventory to green glass pane named "&r"
+		stop
+
+#-----details sort inv-------
+on inventory click:
+	name of player's current inventory contain "Sort server"
+	cancel event
+	if name of clicked item contain "新着順":
+		wait 1 tick
+		open chest with 6 row named "&a&lServer list" to player
+		sort_server_details(player, "new")
+		stop
+	if name of clicked item contain "古い順":
+		wait 1 tick
+		open chest with 6 row named "&a&lServer list" to player
+		sort_server_details(player, "old")
+		stop
+	if name of clicked item contain "公認マップ":
+		wait 1 tick
+		open chest with 6 row named "&a&lServer list" to player
+		sort_server_details(player, "ranked")
+		stop
+	if name of clicked item contain "名前順":
+		wait 1 tick
+		open chest with 6 row named "&a&lServer list" to player
+		sort_server_details(player, "name")
+		stop
+	if name of clicked item contain "MCIDで探す":
+		wait 1 tick
+		set {_slotnum} to 0
+		open chest with 6 row named "&6Search MCID" to player
+		loop all players:
+			set slot {_slotnum} of player's current inventory to skull of loop-player named "&6&l%loop-player%"
+			add 1 to {_slotnum}
+		set slot 53 of player's current inventory to nametag named "&9オフラインのプレイヤーから探す"
+		stop
+
+on inventory click:
+	name of player's current inventory contain "Search MCID"
+	cancel event
+	name of clicked item is set
+	if name of clicked item contain "オフラインのプレイヤーから探す":
+		close player's inventory
+		open anvil gui named "search_mcid" with icon paper text "Search to MCID" for player
+	else:
+		wait 1 tick
+		open chest with 6 row named "&a&lServer list" to player
+		sort_server_details(player, "mcid", uncolored name of clicked item)
+
+#Server Sort (difficulty)
+function sort_server(p: player, diff: text):
+	inv_sort_set({_p})
+	set {_slots} to 11
+	delete {server.page.%{_p}%::*}
+	loop {server::id::*}:
+		set {server.page.%{_p}%::%loop-value%} to {server::%loop-value%::iine}
+	loop size({server.page.%{_p}%::*}) times:
+		set {_value} to max_iine({_p})
+		delete {server.page.%{_p}%::%{_value}%}
+		{server::%{_value}%::relese} is true
+		{server::%{_value}%::diff} is {_diff} #diff select
+		if {_slots} is 43 + 1:
+			set slot 53 of {_p}'s current inventory to arrow named "&3Next Page"
+			stop
+		if {_slots} is 17 or 26 or 35:
+			add 3 to {_slots}
+		if {server::%{_value}%::motd} is not set:
+			if {server::%{_value}%::whitelist} is true:
+				set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "&lWhitelist"
+			else if {server::%{_value}%::custom_icon} is set:
+				if {server::%{_value}%::ranked} is true: #if ranked
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else: #if no ranked
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+			else:
+				if {server::%{_value}%::ranked} is true: #if ranked
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞ &3クリア人数&f:&9%size({server::%{_value}%::goal::*})%" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%"
+		else:
+			if {server::%{_value}%::whitelist} is true:
+				set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%" and "&lWhitelist"
+			else if {server::%{_value}%::custom_icon} is set:
+				if {server::%{_value}%::ranked} is true:
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to {server::%{_value}%::custom_icon} named "&l%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+			else:
+				if {server::%{_value}%::ranked} is true:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%{_value}%::servername}% &a✔" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%{_value}%::servername}%" with lore "&a%size({server::%{_value}%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%{_value}%::owner}% &d&l❤&f:%{server::%{_value}%::iine}%" and "%{server::%{_value}%::motd}%"
+		add 1 to {_slots}
+	stop
+
+#Server Sort (Ranked, MCID, etc...)
+function sort_server_details(p: player, sort: text, sort_text: text = ""):
+	set {_slots} to 11
+	delete {server.page.%{_p}%::*}
+
+	#Sort処理
+	if {_sort} is "new":
+		open chest with 6 row named "&a&lNew Server list" to {_p}
+		set {_reverse_id::*} to reversed({server::id::*}) #Reverse
+		loop {_reverse_id::*}:
+			set {server.page.%{_p}%::%loop-index%} to loop-value
+
+	else if {_sort} is "old":
+		open chest with 6 row named "&8&lOld Server list" to {_p}
+		loop {server::id::*}:
+			set {server.page.%{_p}%::%loop-index%} to loop-value
+	
+	else if {_sort} is "name":
+		open chest with 6 row named "&2&lName Server list" to {_p}
+		loop {server::id::*}:
+			set {_server_name::%loop-index%} to {server::%loop-value%::servername} #サーバーネームをリストに代入
+		set {_alphabetically_sorted::*} to alphabetically sorted {_server_name::*}
+		loop {_alphabetically_sorted::*}:
+			set {_server_id::%loop-index%} to {server::%loop-value%::id} #サーバーネームからIDを取得して代入
+		loop {_server_id::*}:
+			set {server.page.%{_p}%::%loop-index%} to loop-value
+	
+	else:
+		if {_sort} is "ranked":
+			open chest with 6 row named "&b&lRanked Server list" to {_p}
+		if {_sort} is "mcid":
+			open chest with 6 row named "&e&lMCID Server list" to {_p}
+		set {_reverse_id::*} to reversed({server::id::*}) #Reverse
+		loop {_reverse_id::*}:
+			set {server.page.%{_p}%::%loop-index%} to loop-value
+
+	inv_sort_set({_p})
+	loop {server.page.%{_p}%::*}:
+		{server::%loop-value%::relese} is true
+		#Sort
+		if {_sort} is "ranked":
+			if {server::%loop-value%::ranked} is not true:
+				continue
+		
+		if {_sort} is "mcid":
+			if {server::%loop-value%::owner} is not {_sort_text}:
+				continue
+
+		if {_slots} is 43 + 1:
+			set slot 53 of {_p}'s current inventory to arrow named "&3Next Page"
+			stop
+		if {_slots} is 17 or 26 or 35:
+			add 3 to {_slots}
+		if {server::%loop-value%::motd} is not set:
+			if {server::%loop-value%::whitelist} is true:
+				set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "&lWhitelist"
+			else if {server::%loop-value%::custom_icon} is set:
+				if {server::%loop-value%::ranked} is true: #if ranked
+					set slot {_slots} of {_p}'s current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+				else: #if no ranked
+					set slot {_slots} of {_p}'s current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+			else:
+				if {server::%loop-value%::ranked} is true: #if ranked
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞ &3クリア人数&f:&9%size({server::%loop-value%::goal::*})%" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+		else:
+			if {server::%loop-value%::whitelist} is true:
+				set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%" and "&lWhitelist"
+			else if {server::%loop-value%::custom_icon} is set:
+				if {server::%loop-value%::ranked} is true:
+					set slot {_slots} of {_p}'s current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to {server::%loop-value%::custom_icon} named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+			else:
+				if {server::%loop-value%::ranked} is true:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%loop-value%::servername}% &a✔" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+				else:
+					set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+		add 1 to {_slots}
+		delete {server.page.%{_p}%::%loop-index%}
+	stop
+
+#-----------------
+#iine
+#----------------
+on inventory click:
+	name of player's current inventory contain "Server list"
+	{playerdata.%player%::iine_select} is true
+	cancel event
+	name of clicked item is set
+	clicked item isn't green glass pane
+	clicked slot isn't 9 or 18 or 27 or 36 or 53 or 1
+	if uncolored name of clicked item contain "✔":
+		set {_ranked_subtext} to first length of uncolored name of clicked item - 2 characters of uncolored name of clicked item #サーバー名を正確に取得するため(-2はRankedのマークと空白)
+		set {playerdata.%player%::iine_select_server} to {server::%{_ranked_subtext}%::id} #Get server id
+	else:
+		set {playerdata.%player%::iine_select_server} to {server::%uncolored name of clicked item%::id} #Get server id
+	if {server::%{playerdata.%player%::iine_select_server}%::owner} is event-player:
+		send "&c自分のサーバーにはいいねできません！"
+		stop
+	open chest with 1 row named "&6このサーバーに評価しますか？" to player
+	set slot 3 of player's current inventory to light green wool named "&aいいねする"
+	set slot 4 of player's current inventory to barrier block named "&6評価するサーバー&f:&a%{server::%{playerdata.%player%::iine_select_server}%::servername}%" with lore "&e%player%&6のいいねポイント&f:%{playerdata.%player%::iine_point}%"
+	set slot 5 of player's current inventory to red wool named "&cキャンセル"
+
+on inventory click:
+	name of player's current inventory contain "このサーバーに評価しますか？"
+	cancel event
+	clicked slot is 3 or 5
+	if name of clicked item contain "いいねする":
+		if {playerdata.%player%::iine_point} <= 0:
+			send "&cいいねポイントが足りません、いいねポイントをゲットするにはサーバーなどを作りましょう"
+			delete {playerdata.%player%::iine_select}
+			close player's inventory
+			stop
+		if {server::%{playerdata.%player%::iine_select_server}%::iine::%player%} is true:
+			send "&c既にこのサーバーにいいねしています"
+			stop
+		add 1 to {server::%{playerdata.%player%::iine_select_server}%::iine}
+		remove 1 from {playerdata.%player%::iine_point}
+		delete {playerdata.%player%::iine_select}
+		send "&a%{server::%{playerdata.%player%::iine_select_server}%::servername}%&6にいいねしました！"
+		if {server::%{playerdata.%player%::iine_select_server}%::owner} is online:
+			send "&e%player%&6さんが&a%{server::%{playerdata.%player%::iine_select_server}%::servername}%&6にいいねをしました！" to {server::%{playerdata.%player%::iine_select_server}%::owner} parsed as player
+		set {server::%{playerdata.%player%::iine_select_server}%::iine::%player%} to true
+		close player's inventory
+		stop
+	if name of clicked item contain "キャンセル":
+		delete {playerdata.%player%::iine_select}
+		send "&cキャンセルしました"
+		close player's inventory
+		stop
+
+on inventory close:
+	{playerdata.%player%::iine_select} is true
+	delete {playerdata.%player%::iine_select}
+
+#------right click show--------
+on right click on villager:
+	{playerdata.%player%::joining} is not set
+	cancel event
+	wait 1 tick
+	show_server_list(player)
+
+#----------------
+#Server TP
+#---------------
+
+on inventory click:
+	name of player's current inventory contain "Server list"
+	{playerdata.%player%::iine_select} is not true
+	{playerdata.%player%::room::room} is not set #asure_room
+	cancel event
+	name of clicked item is set
+	clicked item isn't green glass pane
+	clicked slot isn't 9 or 18 or 27 or 36 or 46 or 53 or 1
+	name of clicked item don't contain "サーバーを探す" #line 104 details
+	clicked inventory is not player's inventory
+	if uncolored name of clicked item contain "✔":
+		set {_ranked_subtext} to first length of uncolored name of clicked item - 2 characters of uncolored name of clicked item #サーバー名を正確に取得するため(-2はRankedのマークと空白)
+		set {_servername} to {server::%{_ranked_subtext}%::id} #Get server id
+		set {_display_name} to {_ranked_subtext}
+	else:
+		set {_servername} to {server::%uncolored name of clicked item%::id} #Get server id
+		set {_display_name} to uncolored name of clicked item
+	if {playerdata.%player%::joining} is true:
+		if {playerdata.%player%::joined_server} is {server::%uncolored name of clicked item%::id}: #既に参加してるサーバーの場合
+			send "&c既にそのサーバーにいます。"
+			stop
+		remove player from {server::%{playerdata.%player%::joined_server}%::playing::*}
+	set gamemode of player to adventure
+	set {playerdata.%player%::display_name} to {_display_name} #表示する名前
+	set {playerdata.%player%::joined_server} to {_servername} #server id
+	add player to {server::%{playerdata.%player%::joined_server}%::playing::*} #サーバーの変数にプレイヤーを追加
+	command "/mv tp %player% %{playerdata.%player%::joined_server}%" #server TP
+	set {playerdata.%player%::joining} to true #player joined
+	delete {playerdata.%player%::checkpoint}
+	delete {playerdata.%player%::timer}
+	delete {playerdata.%player%::owner}
+	if {server::%{playerdata.%player%::joined_server}%::already_played::%player%} is not set:
+		set {server::%{playerdata.%player%::joined_server}%::already_played::%player%} to floor(unix timestamp of now)
+	rankingbar(player)
+	send "%{_servername}%"
+	if "%{_servername}%" parsed as world is not loaded:
+		set_server_location("%{_servername}%") #なぜか{_servername}がtextと認識されないので""で囲む
+	wait 1 tick  #ワールド間の移動を考慮
+	if {server::%{_servername}%::owner} is player:
+		set {playerdata.%player%::owner} to true
+		if {server::%{_servername}%::relese} is not true:
+			set gamemode of player to creative
+	else:
+		set player's flight mode to false
+	if {server::%{_servername}%::spawn} is set:
+		teleport player to {server::%{_servername}%::spawn}
+	else:
+		teleport player to location at (0, 4, 0)
+	if {server::%{_servername}%::ranking::%player%} is set:
+		send "&6%{playerdata.%player%::display_name}%&3のベストタイム&a%{server::%{_servername}%::ranking::%player%}%"
+	if {server::%{_servername}%::owner_time} is set:
+		send "&3サーバーオーナー&e(%{server::%{_servername}%::owner}%)&3のタイム&a%{server::%{_servername}%::owner_time}%"
+	command "/effect %player% clear"
+	server_item(player)
+
+#-----Player server TP-------
+command /ptp [<player>]:
+	trigger:
+		if arg 1 is not set:
+			send "&6/ptp (player)"
+			stop
+		if arg 1 is event-player:
+			send "&c自分には実行できません"
+			stop
+		if arg 1 is not online:
+			send "&c%arg 1%はオフラインです"
+			stop
+		if {playerdata.%arg 1%::joining} is not true:
+			execute player command "/back"
+			stop
+		if {playerdata.%arg 1%::owner} is true:
+			if {server::%{playerdata.%arg 1%::joined_server}%::whitelist} is true:
+				send "&c%arg 1%が制作しているサーバーはホワイトリストです"
+				stop
+			if {server::%{playerdata.%arg 1%::joined_server}%::relese} is true: #if Relese true
+				command "/effect %player% clear"
+				if {playerdata.%player%::joined_server} is set:
+					remove player from {server::%{playerdata.%player%::joined_server}%::playing::*}
+				set {playerdata.%player%::display_name} to {server::%{playerdata.%arg 1%::joined_server}%::servername}
+				set {playerdata.%player%::joined_server} to {playerdata.%arg 1%::joined_server}
+				set {playerdata.%player%::joining} to true
+				add player to {server::%{playerdata.%arg 1%::joined_server}%::playing::*}
+				command "/mv tp %player% %{playerdata.%arg 1%::joined_server}%" #server TP
+				if {server::%{playerdata.%player%::joined_server}%::already_played::%player%} is not set:
+					set {server::%{playerdata.%player%::joined_server}%::already_played::%player%} to floor(unix timestamp of now)
+				rankingbar(player)
+				wait 1 tick
+				set player's flight mode to false
+				delete {playerdata.%player%::practice_mode}
+				set gamemode of player to adventure
+				if {server::%{playerdata.%arg 1%::joined_server}%::spawn} is set:
+					teleport player to {server::%{playerdata.%arg 1%::joined_server}%::spawn}
+				else:
+					teleport player to location at (0, 4, 0)
+				if {server::%{playerdata.%arg 1%::joined_server}%::ranking::%player%} is set:
+					send "&6%player%&3のベストタイム&a%{server::%{playerdata.%arg 1%::joined_server}%::ranking::%player%}%"
+				if {server::%{playerdata.%arg 1%::joined_server}%::owner_time} is set:
+					send "&3サーバーオーナー&e(%{server::%{playerdata.%arg 1%::joined_server}%::owner}%)&3のタイム&a%{server::%{playerdata.%arg 1%::joined_server}%::owner_time}%"
+				command "/effect %player% clear"
+				server_item(player)
+				stop
+			else: #Not relese
+				command "/effect %player% clear"
+				if {playerdata.%player%::joined_server} is set:
+					remove player from {server::%{playerdata.%player%::joined_server}%::playing::*}
+				set {playerdata.%player%::joined_server} to {playerdata.%arg 1%::joined_server}
+				command "/mv tp %player% %{playerdata.%arg 1%::joined_server}%"
+				wait 1 tick
+				if {playerdata.%player%::invite} is true:
+					set gamemode of player to adventure
+					add player to {server::%{playerdata.%arg 1%::joined_server}%::playing::*}
+					send "&e%player%&6が参加しました。" to {server::%{playerdata.%arg 1%::joined_server}%::playing::*}
+					set {playerdata.%player%::display_name} to {server::%{playerdata.%arg 1%::joined_server}%::servername}
+					set {playerdata.%player%::joined_server} to {playerdata.%arg 1%::joined_server}
+					delete {playerdata.%player%::invite}
+					teleport player to arg 1
+					server_item(player)
+				else:
+					set gamemode of player to spectator
+					send "&e%player%&6が見学しにきました。" to {server::%{playerdata.%arg 1%::joined_server}%::playing::*}
+					teleport player to arg 1
+				if {server::%{playerdata.%player%::joined_server}%::permission::*} contain player:
+					set gamemode of player to creative
+				send "&6/backでロビーに戻れます"
+				set {playerdata.%player%::joining} to true
+				stop
+		else:
+			command "/effect %player% clear"
+			if {playerdata.%player%::joined_server} is set:
+				remove player from {server::%{playerdata.%player%::joined_server}%::playing::*}
+			set {playerdata.%player%::display_name} to {server::%{playerdata.%arg 1%::joined_server}%::servername}
+			set {playerdata.%player%::joined_server} to {playerdata.%arg 1%::joined_server}
+			set {playerdata.%player%::joining} to true
+			add player to {server::%{playerdata.%arg 1%::joined_server}%::playing::*}
+			command "/mv tp %player% %{playerdata.%arg 1%::joined_server}%" #server TP
+			if {server::%{playerdata.%player%::joined_server}%::already_played::%player%} is not set:
+				set {server::%{playerdata.%player%::joined_server}%::already_played::%player%} to floor(unix timestamp of now)
+			rankingbar(player)
+			wait 1 tick
+			set gamemode of player to adventure
+			if {server::%{playerdata.%arg 1%::joined_server}%::spawn} is set:
+				teleport player to {server::%{playerdata.%arg 1%::joined_server}%::spawn}
+			else:
+				teleport player to location at (0, 4, 0)
+			server_item(player)
+			stop
+			
+
+#--------------
+#Hub & quit
+#--------------
+
+command /back:
+	aliases: b
+	trigger:
+		delete {playerdata.%player%::joining} #joining other server check
+		remove player from {server::%{playerdata.%player%::joined_server}%::playing::*}
+		delete {playerdata.%player%::timer} #Timer stop
+		delete {playerdata.%player%::check}
+		delete {playerdata.%player%::checkpoint} #チェックポイント削除
+		delete {playerdata.%player%::joined_server}
+		delete {playerdata.%player%::owner}
+		delete {playerdata.%player%::invite}
+		delete {effect_double.%player%}
+		delete {server::<none>::relese} #バグ対策
+		set player's flight mode to false
+		delete {playerdata.%player%::practice_mode}
+		set gamemode of player to Adventure
+		clear player's inventory
+		delete player's sidebar
+		teleport player to {lobby}
+		command "/effect %player% clear"
+		hub_item(player)
+		#Builder
+		if {builder_permissions::%player%} is set:
+			set gamemode of player to creative
+
+#-----server quit-------
+
+on quit:
+	delete {playerdata.%player%::joining} #joining other server check
+	remove player from {server::%{playerdata.%player%::joined_server}%::playing::*}
+	delete {playerdata.%player%::timer} #Timer stop
+	delete {playerdata.%player%::check}
+	delete {playerdata.%player%::checkpoint} #チェックポイント削除
+	delete {playerdata.%player%::joined_server}
+	delete {playerdata.%player%::owner}
+	delete {playerdata.%player%::invite}
+	delete {effect_double.%player%}
+	command "/effect %player% clear"
+	delete {server::<none>::relese} #バグ対策
+	loop all players:
+		set tab header to "&6&lアスレチック" and footer to "&9Online Player &a%number of all players%&7/20" for loop-player
+
+#------server join-------
+on join:
+	wait 2 tick
+	set gamemode of player to Adventure
+	if {iplog::%player%} is not set:
+		set {iplog::%player%} to "%ip of player% %now%"
+	if {playerdata.%player%::first_login} is not set:
+		set {playerdata.%player%::first_login} to floor(unix timestamp of now)
+	if {playerdata.%player%::iine_point} is not set:
+		set {playerdata.%player%::iine_point} to 0
+	#loop {iplog::*}:
+		#loop-index isn't player
+		#{iplog::%loop-index%} is {iplog::%player%}
+		#set {iplog::%loop-index% & %player%} to "%loop-index% & %player%:%ip of player% %now% (Alt)"
+		#loop all players:
+			#if loop-player is "siso_AZ" or "siso_":
+				#send "&e%player%&6と同じIPを使用しているPlayer&a: &6%loop-index%" to loop-player
+	if {iplog::%player%} is set:
+		set {_newip} to ip of player
+		if {iplog::%player%} isn't {_newip}:
+			set {iplog::%player%} to "%ip of player% %now%"
+	if {playerdata.%player%::notification::*} is set:
+		loop {playerdata.%player%::notification::*}:
+			send loop-value
+		delete {playerdata.%player%::notification::*}
+	loop all players:
+		set tab header to "&6&lFront &b&lLine" and footer to "&9Online Player &a%number of all players%&7/20" for loop-player
+	wait 1 tick
+	execute player command "/back"
+
+#------first join--------
+on first join:
+	set {iplog::%player%} to "%ip of player% %now%"
+	set {playerdata.%player%::first_login} to floor(unix timestamp of now)
+	add player to {allplayer::*}
+	worldedit_add_permission(player)
+	minecraft_add_permission(player)
+
+#------login bonus-------
+on join:
+	if {bounus.%player%} is not set:
+		set {bounus.%player%} to floor(unix timestamp of now) + 86400
+		add 1 to {playerdata.%player%::iine_point}
+		send "&6ログインボーナスを受け取りました！！ &3現在のいいねポイント:&a%{playerdata.%player%::iine_point}%"
+		stop
+	if {bounus.%player%} <= floor(unix timestamp of now):
+		add 1 to {playerdata.%player%::iine_point}
+		clear {bounus.%player%}
+		set {bounus.%player%} to floor(unix timestamp of now) + 86400
+		send "&6ログインボーナスを受け取りました！！ &3現在のいいねポイント:&a%{playerdata.%player%::iine_point}%"
+		stop
+	else:
+		set {_bounustime} to {bounus.%player%} - floor(unix timestamp of now)
+		set {_bounustime} to {_bounustime} / 3600
+		send "&c次のログインボーナスまで残り%round({_bounustime})%時間"
+
+#-----Player collision-------
+on join:
+	if scoreboard team "collision" in scoreboard scoreboard of player is not set:
+		register new scoreboard team "collision" in scoreboard scoreboard of player
+	set {_team} to scoreboard team "collision" in scoreboard scoreboard of player
+	set scoreboard team option COLLISION_RULE of team {_team} to NEVER
+	loop all players:
+		loop-player is not player
+		scoreboard add entry "%loop-player%" to team {_team}
+		scoreboard team "collision" in scoreboard scoreboard of loop-player is set
+		scoreboard add entry "%player%" to team scoreboard team "collision" in scoreboard scoreboard of loop-player
+
+#-----------------
+#Server settings
+#-----------------
+
+#-----menu------
+function server_settings(p: player):
+	open chest with 1 row named "&6&lServer settings" to {_p}
+	{playerdata.%{_p}%::joining} is true
+	{playerdata.%{_p}%::owner} is true #オーナーか確認
+	if {server::%{playerdata.%{_p}%::joined_server}%::relese} is true:
+		set slot 8 of {_p}'s current inventory to grass named "&6サーバーを編集する。" with lore "&cサーバーを編集する場合サーバーは公開前に戻されます。"
+		set slot 0 of {_p}'s current inventory to item frame item named "&bサーバーの詳細を設定する" with lore "&6サーバーの名前、MOTD、ホワリスなどの管理を行えます。"
+	else:
+		set slot 0 of {_p}'s current inventory to nether star named "&aサーバーを公開する" with lore "&6作成したサーバーを公開します。" and "&6サーバー公開後に再度アスレを手直しする場合は再度非公開になります。"
+	set slot 1 of {_p}'s current inventory to chest named "&6サーバーの内容を設定する。"
+	set slot 2 of {_p}'s current inventory to gold block named "&6スポーン地点を設定する。" with lore "&6今立っている地点をスポーン地点に設定します。" and "&5&l※顔の向きも反映されます"
+	set slot 3 of {_p}'s current inventory to name tag named "&9権限者を設定する。" with lore "&6信用できるプレイヤーを選びましょう。"
+	set slot 4 of {_p}'s current inventory to sunflowers named "&dプレイヤーを招待する。" with lore "&6サーバーを遊んでもらいましょう。"
+	stop
+
+#----inv click (menu)----
+on inventory click:
+	name of player's current inventory contain "Server settings"
+	cancel event
+	{playerdata.%player%::joining} is true
+	if name of clicked item contain "サーバーを公開する":
+		close player's inventory
+		if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+			send "&c既にサーバーは公開されています。"
+			stop
+		if {server::%{playerdata.%player%::joined_server}%::startpoint} is not set:
+			send "&cサーバーを公開するには&3スタート地点とゴール地点&cが必要です。"
+			stop
+		if {server::%{playerdata.%player%::joined_server}%::startpoint} and {server::%{playerdata.%player%::joined_server}%::endpoint} is not set:
+			send "&cサーバーを公開するには&3スタート地点とゴール地点&cが必要です。"
+			stop
+		if {server::%{playerdata.%player%::joined_server}%::spawn} is not set:
+			send "&cサーバーを公開するには&dスポーン地点&cが必要です。"
+			stop
+		set {playerdata.%player%::check} to true
+		send "&6サーバーを公開するには自分の作成したアスレをクリアする必要があります。"
+		set gamemode of player to adventure
+		clear player's inventory
+		command "/effect %player% clear"
+		delete {playerdata.%player%::checkpoint}
+		set slot 0 of player's inventory to eye of ender named "&6チェックポイントに戻る"
+		set slot 8 of player's inventory to grass named "&cサーバー編集に戻る"
+		if {server::%{playerdata.%player%::joined_server}%::spawn} is set:
+			teleport player to {server::%{playerdata.%player%::joined_server}%::spawn}
+		else:
+			teleport player to location at (0, 4, 0)
+		if {server::%{playerdata.%player%::joined_server}%::elytra} is true:
+			set chestplate of player to elytra
+		stop
+	if name of clicked item contain "サーバーの詳細を設定する":
+		open chest with 1 row named "&6サーバーの詳細設定" to player
+		set slot 0 of player's current inventory to name tag named "&aサーバーの名前を変更する"
+		set slot 1 of player's current inventory to painting item named "&9サーバーのMOTDを変更する"
+		if {server::%{playerdata.%player%::joined_server}%::custom_icon} is not set:
+			set slot 2 of player's current inventory to emerald block named "&dサーバーのアイコンを変更する"
+		else:
+			set slot 2 of player's current inventory to {server::%{playerdata.%player%::joined_server}%::custom_icon} named "&dサーバーのアイコンを変更する"
+		set slot 3 of player's current inventory to southward oak wood gate named "&3サーバーのホワイトリストを変更する"
+		set slot 4 of player's current inventory to book named "&eサーバーのコメントを管理する"
+		stop
+	if name of clicked item contain "サーバーの内容を設定する":
+		open chest with 1 row named "&6サーバーの内容設定" to player
+		set slot 0 of player's current inventory to stick named "&aスタート地点とゴール地点を設定する。"
+		set slot 1 of player's current inventory to glass bottle named "&5ポーションブロックを設定する。" with lore "&6特定のブロックにポーション効果を付属できます。"
+		set slot 2 of player's current inventory to torch named "&9チェックポイントを設定する。" with lore "&6看板を置くとチェックポイントを設定できます。"
+		if {server::%{playerdata.%player%::joined_server}%::elytra} is not set:
+			set slot 3 of player's current inventory to elytra named "&bエリトラマップ:&cOFF" with lore "&6サーバーに入った際エリトラを自動で装備するか設定できます。"
+		if {server::%{playerdata.%player%::joined_server}%::elytra} is true:
+			set slot 3 of player's current inventory to elytra named "&bエリトラマップ:&aON" with lore "&6サーバーに入った際エリトラを自動で装備するか設定できます。"
+		if {server::%{playerdata.%player%::joined_server}%::world_time} is not set:
+			set slot 4 of player's current inventory to clock named "&eサーバーの時刻を設定する: &6設定されてません" with lore "&6サーバーの景観に合った時間を設定できます。"
+		else:
+			if {server::%{playerdata.%player%::joined_server}%::world_time} is day:
+				set {_display} to "&c朝"
+			else if {server::%{playerdata.%player%::joined_server}%::world_time} is dusk:
+				set {_display} to "&6夕暮れ"
+			else if {server::%{playerdata.%player%::joined_server}%::world_time} is night:
+				set {_display} to "&9夜"
+			else if {server::%{playerdata.%player%::joined_server}%::world_time} is dawn:
+				set {_display} to "&b夜明け"
+			set slot 4 of player's current inventory to clock named "&eサーバーの時刻を設定する: %{_display}%" with lore "&6サーバーの景観に合った時間を設定できます。"
+		set slot 5 of player's current inventory to lever named "&cスタート地点とゴール地点を削除する。" with lore "&6スタート地点とゴール地点を削除します"
+	if name of clicked item contain "スポーン地点を設定する。":
+		{playerdata.%player%::owner} is true #サーバーオーナーか確認
+		if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+			set {_oldspawn} to {server::%{playerdata.%player%::joined_server}%::spawn}
+			if {_oldspawn} != location of player:
+				open chest with 1 row named "&c確認(スポーン)" to player
+				set slot 3 of player's current inventory to light green wool named "&a変更する"
+				set slot 4 of player's current inventory to barrier block named "&4&lスポーン地点を変更すると再度公開試験を受ける必要があります。"
+				set slot 5 of player's current inventory to red wool named "&cキャンセル"
+				stop
+		set {server::%{playerdata.%player%::joined_server}%::spawn} to location of player
+		set {server::%{playerdata.%player%::joined_server}%::spawn_text} to parse_location_text(location of player) 
+		send "&6スポーン地点を&a(%location of player%)&6セットしました"
+		stop
+	if name of clicked item contain "サーバーを編集する":
+		open chest with 1 row named "&c確認(サーバー編集)" to player
+		set slot 3 of player's current inventory to light green wool named "&a変更する"
+		set slot 4 of player's current inventory to barrier block named "&4&lサーバーを編集場合再度公開試験を受ける必要があります。"
+		set slot 5 of player's current inventory to red wool named "&cキャンセル"
+		stop
+	if name of clicked item contain "権限者を設定する":
+		open chest with 1 row named "&6権限者の設定" to player
+		set slot 3 of player's current inventory to light green wool named "&a追加する"
+		set slot 4 of player's current inventory to book named "&3確認する"
+		set slot 5 of player's current inventory to red wool named "&c削除する"
+		stop
+	if name of clicked item contain "プレイヤーを招待する":
+		wait 1 tick #バグ防止
+		open chest with 6 row named "&6プレイヤーを招待する" to player
+		set {_slotnum} to 0
+		loop all players:
+			if {server::%{playerdata.%player%::joined_server}%::playing::*} contain loop-player:
+				continue
+			set slot {_slotnum} of player's current inventory to skull of loop-player named "&6&l%loop-player%"
+			add 1 to {_slotnum}
+		stop
+
+#-------other inv click-------
+on inventory click:
+	if name of player's current inventory contain "確認(スポーン)":
+		cancel event
+		if name of clicked item contain "変更する":
+			set {server::%{playerdata.%player%::joined_server}%::spawn} to location of player
+			set {server::%{playerdata.%player%::joined_server}%::spawn_text} to parse_location_text(location of player)
+			send "&6スポーン地点を&a(%location of player%)&6セットしました"
+			delete {server::%{playerdata.%player%::joined_server}%::relese}
+			close player's inventory
+			stop
+		if name of clicked item contain "キャンセル":
+			close player's inventory
+			stop
+	if name of player's current inventory contain "確認(サーバー編集)":
+		cancel event
+		if name of clicked item contain "変更する":
+			send "&6サーバーの編集が許可されました"
+			if size({server::%{playerdata.%player%::joined_server}%::goal::*}) >= 1:
+				set {_top_player} to ranking_top({playerdata.%player%::joined_server}, "first")
+				remove 1 from {playerdata.%{_top_player}%::global_ranking}
+			delete {server::%{playerdata.%player%::joined_server}%::relese}
+			delete {server::%{playerdata.%player%::joined_server}%::ranking::*}
+			delete {server::%{playerdata.%player%::joined_server}%::owner_time}
+			delete {server::%{playerdata.%player%::joined_server}%::goal::*}
+			set gamemode of player to creative
+			add_permissions_group(player, {playerdata.%player%::joined_server})
+			close player's inventory
+			loop {server::%{playerdata.%player%::joined_server}%::playing::*}: #サーバーから蹴る
+				if loop-value is player:
+					continue
+				else:
+					send "&cオーナーがサーバーの公開をストップしました。" to loop-value
+					execute loop-value command "/back"
+			stop
+		if name of clicked item contain "キャンセル":
+			close player's inventory
+			stop
+#----permission---
+	if name of player's current inventory contain "権限者の設定":
+		cancel event
+		if name of clicked item contain "追加する":
+			set {_slotnum} to 0
+			open chest with 6 row named "&6権限者を追加する" to player
+			loop all players in world "%player's world%" parsed as world:
+				if {server::%{playerdata.%player%::joined_server}%::permission::*} contain loop-player:
+					continue
+				if loop-player is player:
+					continue
+				set slot {_slotnum} of player's current inventory to skull of loop-player named "&6&l%loop-player%"
+				add 1 to {_slotnum}
+			stop
+		if name of clicked item contain "削除する":
+			set {_slotnum} to 0
+			open chest with 6 row named "&c権限者を削除する" to player
+			loop all players in world "%player's world%" parsed as world:
+				if {server::%{playerdata.%player%::joined_server}%::permission::*} do not contain loop-player:
+					continue
+				if loop-player is player:
+					continue
+				set slot {_slotnum} of player's current inventory to skull of loop-player named "&6&l%loop-player%"
+				add 1 to {_slotnum}
+			stop
+		if name of clicked item contain "確認する":
+			set {_slotnum} to 0
+			open chest with 6 row named "&3権限者を確認する" to player
+			loop all players in world "%player's world%" parsed as world:
+				if {server::%{playerdata.%player%::joined_server}%::permission::*} do not contain loop-player:
+					continue
+				if loop-player is player:
+					continue
+				set slot {_slotnum} of player's current inventory to skull of loop-player named "&6&l%loop-player%"
+				add 1 to {_slotnum}
+			stop
+#-----permission2---
+	if name of player's current inventory contain "権限者を追加する":
+		cancel event
+		name of clicked item is set
+		set {_players::*} to all players in world "%player's world%" parsed as world
+		if {_players::*} do not contain uncolored name of clicked item parsed as player:
+			send "&cプレイヤーが見つかりません"
+			stop
+		add uncolored name of clicked item parsed as player to {server::%{playerdata.%player%::joined_server}%::permission::*}
+		set gamemode of uncolored name of clicked item parsed as player to creative
+		add_permissions_group(uncolored name of clicked item parsed as player, {playerdata.%player%::joined_server})
+		close player's inventory
+		send "&a%name of clicked item%を権限者に追加しました。"
+		send "&3%{playerdata.%player%::display_name}%&6のサーバーで&a権限が付属されました" to uncolored name of clicked item parsed as player
+		stop
+	if name of player's current inventory contain "権限者を削除する":
+		cancel event
+		name of clicked item is set
+		remove uncolored name of clicked item parsed as player from {server::%{playerdata.%player%::joined_server}%::permission::*}
+		set gamemode of uncolored name of clicked item parsed as player to adventure
+		remove_permissions_group(uncolored name of clicked item parsed as player, {playerdata.%player%::joined_server})
+		close player's inventory
+		send "&c%name of clicked item%を権限者から削除しました。"
+		send "&3%{playerdata.%player%::display_name}%&6のサーバーから&c権限を剥奪されました" to uncolored name of clicked item parsed as player
+		stop
+	if name of player's current inventory contain "権限者を確認する":
+		cancel event
+		stop
+#------invite player------
+	if name of player's current inventory contain "プレイヤーを招待する":
+		cancel event
+		name of clicked item is set
+		close player's inventory
+		#send "&e%player%&6から&3%{server::%{playerdata.%player%::joined_server}%::servername}%&6への招待が来ています。<command:/ptp %player%><tooltip:&3%{server::%{playerdata.%player%::joined_server}%::servername}%へ接続する>&3接続する。" to uncolored name of clicked item parsed as player
+		send "&e%player%&6から&3%{server::%{playerdata.%player%::joined_server}%::servername}%&6への招待が来ています。&a<command:/ptp %player%><ttp:&6/ptp %player%>接続する" to uncolored name of clicked item parsed as player
+		set {playerdata.%uncolored name of clicked item%::invite} to true
+		wait 15 seconds
+		delete {playerdata.%uncolored name of clicked item%::invite}
+		send "&c招待が無効になりました。" to uncolored name of clicked item parsed as player
+		stop
+#-------server details--------
+	if name of player's current inventory contain "サーバーの詳細設定":
+		cancel event
+		name of clicked item is set
+		if name of clicked item contain "サーバーの名前を変更する":
+			close player's inventory
+			open anvil gui named "server_name_change" with icon paper text "%{server::%{playerdata.%player%::joined_server}%::servername}%" for player
+			stop
+		if name of clicked item contain "サーバーのMOTDを変更する":
+			close player's inventory
+			if {server::%{playerdata.%player%::joined_server}%::motd} is not set:
+				open anvil gui named "server_motd" with icon paper text "Enter MOTD" for player
+			else:
+				open anvil gui named "server_motd" with icon paper text "%{server::%{playerdata.%player%::joined_server}%::motd}%" for player
+			stop
+		if name of clicked item contain "サーバーのアイコンを変更する":
+			open chest with 6 row named "&dSelect custom icon" to player
+			delete {select_custom_icon.%player%::*}
+			loop all items:
+				set {select_custom_icon.%player%::%loop-value%} to loop-value
+			set {_slots} to 0
+			loop {select_custom_icon.%player%::*}:
+				loop-value is not air
+				if {_slots} is 53:
+					set slot 53 of player's current inventory to arrow named "&3Next Page"
+					stop
+				set slot {_slots} of player's current inventory to loop-value
+				add 1 to {_slots}
+				delete {select_custom_icon.%player%::%loop-value%}
+			stop
+		if name of clicked item contain "サーバーのホワイトリストを変更する":
+			if {server::%{playerdata.%player%::joined_server}%::whitelist} is not true:
+				set {server::%{playerdata.%player%::joined_server}%::whitelist} to true
+				send "&6ホワイトリストを&aON&6にしました"
+				stop
+			if {server::%{playerdata.%player%::joined_server}%::whitelist} is true:
+				delete {server::%{playerdata.%player%::joined_server}%::whitelist}
+				send "&6ホワイトリストを&cOFF&6にしました"
+				stop
+		if name of clicked item contain "サーバーのコメントを管理する":
+			set {_slots} to 0
+			open chest with 6 row named "&3コメントを管理する" to player
+			loop {server::%{playerdata.%player%::joined_server}%::comment::*}:
+				set {_split_comment::*} to loop-value split at "|"
+				set {_location} to parse_text_location(loop-index)
+				set slot {_slots} of player's current inventory to paper named {_split_comment::1} with lore "&6Player: &e%{_split_comment::2}%" and "&6Location: &9%{_location}%"
+				add 1 to {_slots}
+			stop
+
+#---------server change settings----------
+	if name of player's current inventory contain "サーバーの内容設定":
+		cancel event
+		name of clicked item is set
+		if name of clicked item contain "スタート地点とゴール地点を設定する。":
+			close player's inventory
+			give stick named "&6スタートゴール設定" with lore "ブロックに向かって左クリックでスタート地点設定" and "ブロックに向かって右クリックでゴール地点設定" to player
+			stop
+		if name of clicked item contain "ポーションブロックを設定する。":
+			close player's inventory
+			give glass bottle named "&5ブロックエフェクト" to player
+			stop
+		if name of clicked item contain "チェックポイントを設定する。":
+			close player's inventory
+			command "/give %player% sign 1 0 {display:{Name:""チェックポイント"",Lore:[""この看板を置くとチェックポイントが設定できます""]}}"
+			stop
+		if name of clicked item contain "エリトラマップ":
+			close player's inventory
+			if {server::%{playerdata.%player%::joined_server}%::elytra} is true:
+				delete {server::%{playerdata.%player%::joined_server}%::elytra}
+				send "&6エリトラマップを&cオフ&6にしました"
+			else:
+				set {server::%{playerdata.%player%::joined_server}%::elytra} to true
+				send "&6エリトラマップを&aオン&6にしました"
+			stop
+		if name of clicked item contain "サーバーの時刻を設定する":
+			#Day -> Dusk -> night -> dawn -> not set
+			if {server::%{playerdata.%player%::joined_server}%::world_time} is day:
+				set {server::%{playerdata.%player%::joined_server}%::world_time} to dusk
+				set {_display} to "&6夕暮れ"
+			else if {server::%{playerdata.%player%::joined_server}%::world_time} is dusk:
+				set {server::%{playerdata.%player%::joined_server}%::world_time} to night
+				set {_display} to "&9夜"
+			else if {server::%{playerdata.%player%::joined_server}%::world_time} is night:
+				set {server::%{playerdata.%player%::joined_server}%::world_time} to dawn
+				set {_display} to "&b夜明け"
+			else if {server::%{playerdata.%player%::joined_server}%::world_time} is dawn:
+				set {server::%{playerdata.%player%::joined_server}%::world_time} to day
+				set {_display} to "&c朝"
+			if {server::%{playerdata.%player%::joined_server}%::world_time} is not set:
+				set {server::%{playerdata.%player%::joined_server}%::world_time} to day
+			send "%{server::%{playerdata.%player%::joined_server}%::world_time}%"
+			set slot clicked slot of player's current inventory to clock named "&eサーバーの時刻を設定する: %{_display}%" with lore "&6サーバーの景観に合った時間を設定できます。"
+			stop
+		if name of clicked item contain "スタート地点とゴール地点を削除する。":
+			close player's inventory
+			delete {server::%{playerdata.%player%::joined_server}%::startpoint}
+			delete {server::%{playerdata.%player%::joined_server}%::endpoint}
+			send "&cスタート地点とゴール地点を削除しました"
+			give stick named "&6スタートゴール設定" with lore "ブロックに向かって左クリックでスタート地点設定" and "ブロックに向かって右クリックでゴール地点設定" to player
+			stop
+#--------server icon next page & icon select---------
+	if name of player's current inventory contain "Select custom icon":
+		cancel event
+		if name of clicked item contain "Next Page":
+			if size({select_custom_icon.%player%::*}) is 0:
+				delete {select_custom_icon.%player%::*}
+				loop all items:
+					set {select_custom_icon.%player%::%loop-value%} to loop-value
+				set {_slots} to 0
+				loop {select_custom_icon.%player%::*}:
+					loop-value is not air
+					if {_slots} is 53:
+						set slot 53 of player's current inventory to arrow named "&3Next Page"
+						stop
+					set slot {_slots} of player's current inventory to loop-value
+					add 1 to {_slots}
+					delete {select_custom_icon.%player%::%loop-value%}
+				stop
+			set {_slots} to 0
+			loop {select_custom_icon.%player%::*}:
+				if {_slots} is 53:
+					set slot 53 of player's current inventory to arrow named "&3Next Page"
+					stop
+				set slot {_slots} of player's current inventory to loop-value
+				add 1 to {_slots}
+				delete {select_custom_icon.%player%::%loop-value%}
+			stop
+#-----------icon select------------
+		else:
+			clicked item is set
+			clicked item is not air
+			set {server::%{playerdata.%player%::joined_server}%::custom_icon} to clicked item
+			close player's inventory
+			send "&aアイコンを設定しました"
+			stop
+#-----------comment manager------------
+	if name of player's current inventory contain "コメントを管理する":
+		cancel event
+		clicked item is set
+		name of clicked item is set
+
+		set {_name} to colored name of clicked item
+		set {_line_one} to line 1 of lore of clicked item
+		set {_line_two} to line 2 of lore of clicked item
+	
+		open chest with 1 row named "&6コメントの管理" to player
+		set slot 4 of player's current inventory to paper named {_name} with lore {_line_one} and {_line_two}
+		set slot 2 of player's current inventory to ender eye named "&5テレポートする"
+		set slot 6 of player's current inventory to red wool named "&c削除する"
+		stop
+
+	if name of player's current inventory contain "コメントの管理":
+		cancel event
+		clicked item is set
+		set {_split::*} to uncolored line 1 of lore of slot 4 of player's current inventory split at "Player: "
+		set {_player} to {_split::2}
+		set {_split::*} to uncolored line 2 of lore of slot 4 of player's current inventory split at "Location: "
+		set {_location} to {_split::2}
+		replace all "x: ", "y: " and "z: " with " " in {_location}
+		replace all " " with "" in {_location}
+		set {_split::*} to {_location} split at ","
+
+		if name of clicked item contain "テレポートする":
+			teleport player to location at ({_split::1} parsed as number, {_split::2} parsed as number, {_split::3} parsed as number)
+			close player's inventory
+			stop
+		if name of clicked item contain "削除する":
+			remove "%colored name of slot 4 of player's current inventory%|%{_player}%" from {server::%{playerdata.%player%::joined_server}%::comment::*}
+			send "%colored name of slot 4 of player's current inventory%&cを削除しました、次回の再起動でホログラムが消去されます"
+			set {_slots} to 0
+			open chest with 6 row named "&3コメントを管理する" to player
+			loop {server::%{playerdata.%player%::joined_server}%::comment::*}:
+				set {_split_comment::*} to loop-value split at "|"
+				set {_location} to parse_text_location(loop-index)
+				set slot {_slots} of player's current inventory to paper named {_split_comment::1} with lore "&6Player: &e%{_split_comment::2}%" and "&6Location: &9%{_location}%"
+				add 1 to {_slots}
+			stop
+							
+
+#-----server setting menu open----------
+on rightclick holding clock:
+	name of event-item contain "Server settings"
+	{playerdata.%player%::owner} is true
+	server_settings(player)
+
+#--------------
+#Server relese
+#--------------
+#-----diff set----
+function server_diff(p: player):
+	open chest with 1 row named "&6&lServer diff" to {_p}
+	set slot 0 of {_p}'s current inventory to white concrete named "&6難易度の設定。" with lore "難易度を選んでください"
+	set slot 2 of {_p}'s current inventory to pink concrete named "&dEasy"
+	set slot 3 of {_p}'s current inventory to magenta concrete named "&6Normal"
+	set slot 4 of {_p}'s current inventory to red concrete named "&4Hard"
+	set slot 5 of {_p}'s current inventory to purple concrete named "&5Extra"
+
+#----inv click (server relese)------
+on inventory click:
+	name of player's current inventory contain "Server diff"
+	cancel event
+	{playerdata.%player%::joining} is true
+	clicked item isn't white concrete
+	name of clicked item is set
+	if name of clicked item contain "Easy":
+		set {server::%{playerdata.%player%::joined_server}%::diff} to "Easy"
+	if name of clicked item contain "Normal":
+		set {server::%{playerdata.%player%::joined_server}%::diff} to "Normal"
+	if name of clicked item contain "Hard":
+		set {server::%{playerdata.%player%::joined_server}%::diff} to "Hard"
+	if name of clicked item contain "Extra":
+		set {server::%{playerdata.%player%::joined_server}%::diff} to "Extra"
+	if {server::%{playerdata.%player%::joined_server}%::first_relese} is not set:
+		add 1 to {playerdata.%player%::iine_point}
+		set {server::%{playerdata.%player%::joined_server}%::first_relese} to floor(unix timestamp of now)
+		set {server::%{playerdata.%player%::joined_server}%::iine} to 0
+	server_relese(player)
+
+#----server relese-------
+function server_relese(p: player):
+	set {server::%{playerdata.%{_p}%::joined_server}%::relese} to true
+	broadcast "&e%{_p}%が&6サーバーを公開しました！ &a&l%{playerdata.%{_p}%::display_name}%"
+	remove_permissions_group({_p}, {playerdata.%{_p}%::joined_server})
+	loop {server::%{playerdata.%{_p}%::joined_server}%::permission::*}:
+		remove_permissions_group(loop-value, {playerdata.%{_p}%::joined_server})
+	close {_p}'s inventory
+
+#-------break & place-------
+on break:
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		cancel event
+		if {playerdata.%player%::owner} is true:
+			send "&c公開したサーバーは""Server settings → サーバーを編集する""で再度編集ができます"
+		else:
+			send "&cこのサーバーは既に公開済みなので編集ができません"
+
+on place:
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		cancel event
+		if {playerdata.%player%::owner} is true:
+			send "&c公開したサーバーは""Server settings → サーバーを編集する""で再度編集ができます"
+		else:
+			send "&cこのサーバーは既に公開済みなので編集ができません"
+
+on break of lapis block:
+	{server::%{playerdata.%player%::joined_server}%::startpoint} is location of event-block
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		send "&c公開したサーバーは""Server settings → サーバーを編集する""で再度編集ができます"
+		stop
+	delete {server::%{playerdata.%player%::joined_server}%::startpoint}
+	send "&cスタート地点を削除しました。"
+
+on break of diamond block:
+	{server::%{playerdata.%player%::joined_server}%::endpoint} is location of event-block
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		send "&c公開したサーバーは""Server settings → サーバーを編集する""で再度編集ができます"
+		stop
+	delete {server::%{playerdata.%player%::joined_server}%::endpoint}
+	send "&cゴール地点を削除しました。"
+
+on food bar change:
+	cancel event
+
+#--------------
+#Command list
+#--------------
+
+#----/item----
+command /item:
+	trigger:
+		{playerdata.%player%::joining} is true
+		{playerdata.%player%::check} isn't true
+		server_item(player)
+
+command /s:
+	trigger:
+		show_server_list(player)
+
+command /checkpoint:
+	aliases: cp
+	trigger:
+		{playerdata.%player%::practice_mode} is true
+		set {playerdata.%player%::checkpoint} to location of player
+		send "&aチェックポイントを設定しました、削除するには/dcと打ってください"
+		stop
+
+command /deletecheckpoint:
+	aliases: dc, rc, removecheckpoint
+	trigger:
+		delete {playerdata.%player%::checkpoint}
+		send "&cチェックポイント消しました"
+		stop
+
+command /serverhelp:
+	aliases: sh, rh, realmhelp, asurehelp, tip, tips, help
+	trigger:
+		send "&6-------Tips-----------"
+		send "&3看板を置くとチェックポイントを設定できます"
+		send "&3/backでロビーに戻れます"
+		send "&3/sでサーバー一覧が開けます"
+		send "&3/itemで設定アイテムを取れます"
+		send "&3/dcで""自分の""チェックポイントを削除できます。"
+		send "&3/ptp (プレイヤー)でそのプレイヤーの遊んでるサーバーにTPできます"
+		send "&6&lワールドエディット使えます"
+		send "&6&lバグとか違反とか色々運営に報告したいときは/report (要件) でお願いします。"
+
+#---------------
+#Function list
+#---------------
+
+#-----server list design--------
+function inv_sort_set(p: player):
+	loop 54 times: #6 row
+		if loop-number - 1 is 9 or 18 or 27 or 36 or 46 or 1:
+			if loop-number - 1 is 1:
+				set slot 1 of {_p}'s current inventory to pink dye named "&6サーバーに&d「いいね」&6を付ける"
+			if loop-number - 1 is 9:
+				set slot 9 of {_p}'s current inventory to pink concrete named "&d&lEasy"
+			if loop-number - 1 is 18:
+				set slot 18 of {_p}'s current inventory to magenta concrete named "&6&lNormal"
+			if loop-number - 1 is 27:
+				set slot 27 of {_p}'s current inventory to red concrete named "&4&lHard"
+			if loop-number - 1 is 36:
+				set slot 36 of {_p}'s current inventory to purple concrete named "&5&lExtra"
+			if loop-number - 1 is 46:
+				set slot 46 of {_p}'s current inventory to nametag named "&9サーバーを細かく探す"
+			continue
+		if loop-number - 1 >= 11:
+			if loop-number - 1 <= 43:
+				loop-number - 1 is not 17 or 19 or 26 or 28 or 35 or 37 or 46
+				if slot loop-number - 1 of {_p}'s current inventory is not air:
+					set slot loop-number - 1 of {_p}'s current inventory to air
+				continue
+		set slot loop-number - 1 of {_p}'s current inventory to green glass pane named "&r"
+
+#--------server item--------
+function server_item(p: player):
+	clear {_p}'s inventory
+	set slot 0 of {_p}'s inventory to eye of ender named "&6チェックポイントに戻る"
+	set slot 1 of {_p}'s inventory to clay brick item named "&3ロビーに戻る"
+	set slot 2 of {_p}'s inventory to map named "&eアスレチック"
+	set slot 3 of {_p}'s inventory to feather named "&9練習モード"
+	set slot 4 of {_p}'s inventory to book named "&3アスレチックの情報"
+	if {server::%{playerdata.%{_p}%::joined_server}%::elytra} is true:
+		set chestplate of {_p} to elytra
+	if {playerdata.%{_p}%::owner} is true:
+		set slot 7 of {_p}'s inventory to Totem of Undying named "&ePlayer settings"
+		set slot 7 of {_p}'s inventory to Totem of Undying named "&ePlayer settings"
+	else:
+		set slot 8 of {_p}'s inventory to Totem of Undying named "&ePlayer settings"
+	if {playerdata.%{_p}%::owner} is true:
+		set slot 8 of {_p}'s inventory to clock named "&3Server settings"
+
+#-------set server location--------
+function set_server_location(server: text):
+	#World Load
+	command "/mv load %{_server}%"
+	#spawn
+	if {server::%{_server}%::spawn_text} is set:
+		set {server::%{_server}%::spawn} to parse_text_location({server::%{_server}%::spawn_text})
+	#startpoint
+	if {server::%{_server}%::startpoint_text} is set:
+		set {server::%{_server}%::startpoint} to parse_text_location({server::%{_server}%::startpoint_text})
+	#endpoint
+	if {server::%{_server}%::endpoint_text} is set:
+		set {server::%{_server}%::endpoint} to parse_text_location({server::%{_server}%::endpoint_text})
+	#set hologram
+	set {server::%{_server}%::skull} to skull of "%{server::%{_server}%::owner}%" parsed as offline player
+	if {server::%{_server}%::spawn} is set:
+		set_hologram({_server})
+	#set comment
+	if {server::%{_server}%::comment::*} is set:
+		set_comment({_server})
+	#Potion effect
+	if {server::%{_server}%::effect_location_text::*} is set:
+		loop {server::%{_server}%::effect_location_text::*}:
+			set {_parse_loc} to parse_text_location(loop-value)
+			add {_parse_loc} to {server::%{_server}%::effect_location::*}
+			set {effect.%{_parse_loc}%} to {effect_text.%loop-value%}
+			set {effect_time.%{_parse_loc}%} to {effect_time_text.%loop-value%}
+			set {effect_lv.%{_parse_loc}%} to {effect_lv_text.%loop-value%}
+		
+#------set server hologram-------
+function set_hologram(server: text):
+	delete hologram {server::%{_server}%::hologram_ranking}
+	delete hologram {server::%{_server}%::hologram_description}
+
+	#Set Hologram (Ranking & discription)
+	set {_x} to {server::%{_server}%::spawn}'s x-loc
+	set {_y} to {server::%{_server}%::spawn}'s y-loc
+	set {_z} to {server::%{_server}%::spawn}'s z-loc
+	set {_world} to {_server} parsed as world
+	set {_yaw} to yaw of {server::%{_server}%::spawn}
+	set {_pitch} to pitch of {server::%{_server}%::spawn}
+
+	set {_plus_sin} to sin({_yaw})
+	set {_plus_cos} to cos({_yaw})
+	set {_rotate_sin} to sin({_yaw} - 45)
+	set {_rotate_cos} to cos({_yaw} - 45)
+	set {_loc_sin} to ({_plus_sin} + {_rotate_sin}) * 3 * -1
+	set {_loc_cos} to ({_plus_cos} + {_rotate_cos}) * 3
+
+	set {_hologram_loc} to location({_x} + {_loc_sin}, {_y} + 5, {_z} + {_loc_cos}, {_world}, {_yaw}, {_pitch})
+	create a new hologram with line "&a&lTime Ranking" at {_hologram_loc}
+	set {_holo} to last created hologram
+	insert lines diamond block in {_holo} at line 0
+	append lines "" to {_holo}
+	if size({server::%{_server}%::ranking::*}) is 0:
+		append lines "&cNo Score!" to {_holo}
+	loop {server::%{_server}%::ranking::*}:
+		set {_ranking::%loop-index%} to loop-value
+	if size({_ranking::*}) >= 10:
+		set {_ranking.looptime} to 10
+	else:
+		set {_ranking.looptime} to "%size({_ranking::*})%" parsed as number
+	set {_high} to 9999
+	loop {_ranking.looptime} times:
+		loop {_ranking::*}:
+			loop-value-2 < {_high}
+			set {_high} to loop-value-2
+			set {_highplayer} to loop-index
+		if loop-number is 1:
+			append lines "&e&l✯&d%{_highplayer}%&f: &b&l%{_high} / 0.20% &6seconds" to {_holo}
+		else:
+			append lines "&e%{_highplayer}%&f: &b&l%{_high} / 0.20% &6seconds" to {_holo}
+		delete {_ranking::%{_highplayer}%}
+		set {_high} to 9999
+	set {server::%{_server}%::hologram_ranking} to last created hologram
+	#Hologram (Server Description)
+	set {_rotate_sin} to sin({_yaw} + 45)
+	set {_rotate_cos} to cos({_yaw} + 45)
+	set {_loc_sin} to ({_plus_sin} + {_rotate_sin}) * 3 * -1
+	set {_loc_cos} to ({_plus_cos} + {_rotate_cos}) * 3
+	set {_hologram_loc} to location({_x} + {_loc_sin}, {_y} + 5, {_z} + {_loc_cos}, {_world}, {_yaw}, {_pitch})
+	create a new hologram with line "&6&l%{server::%{_server}%::servername}%" at {_hologram_loc}
+	set {_holo} to last created hologram
+	insert lines {server::%{_server}%::skull} in {_holo} at line 0
+	append lines "" to {_holo}
+	append lines "&eAuthor&3:&6&l%{server::%{_server}%::owner}%" to {_holo}
+	append lines "&5Clear players&3:&6&l%size({server::%{_server}%::goal::*})%" to {_holo}
+	if {server::%{_server}%::ranking::*} is set:
+		set {_top_player} to ranking_top({_server}, "first")
+		append lines "&bTOP Time&3:&6&l%{server::%{_server}%::ranking::%{_top_player}%} / 0.20% &d&l(%{_top_player}%)" to {_holo}
+		append lines "&2Average Time&3:&6&l%average({server::%{_server}%::ranking::*}) / 0.20%" to {_holo}
+	set {server::%{_server}%::hologram_description} to last created hologram
+
+#-------set comment------
+function set_comment(server: text):
+	delete {server::%{_server}%::comment_holograms::*}
+	loop {server::%{_server}%::comment::*}:
+		set {_location} to parse_text_location(loop-index)
+		set {_split_comment::*} to loop-value split at "|"
+		create a new hologram with line "&e%{_split_comment::2}%&bからのコメント" at {_location}
+		set {_holo} to last created hologram
+		append lines "&6%{_split_comment::1}%" to {_holo}
+		add last created hologram to {server::%{_server}%::comment_holograms::*}
+
+#-------add comment------
+function add_comment(comment: objects, server: text, location: location, p: player, mode: text = ""):
+	set {_comment} to join {_comment::*} with newline
+	set {_comment} to "%{_comment}%|%{_p}%"
+	set {_text_location} to parse_location_text({_location})
+	set {server::%{_server}%::comment::%{_text_location}%} to {_comment}
+
+	set {_split_comment::*} to {_comment} split at "|"
+	if {_mode} is "reply":
+		create a new hologram with line "&e%{_p}%&5からの返信" at {_location}
+	else:
+		create a new hologram with line "&e%{_p}%&bからのコメント" at {_location}
+	set {_holo} to last created hologram
+	append lines "&6%{_split_comment::1}%" to {_holo}
+	add last created hologram to {server::%{playerdata.%{_p}%::joined_server}%::comment_holograms::*}
+
+#-------parse text location------
+function parse_text_location(text: text) :: location:
+	set {_locations::*} to {_text} split at ","
+	return location({_locations::1} parsed as number, {_locations::2} parsed as number, {_locations::3} parsed as number, {_locations::4} parsed as world, {_locations::5} parsed as number, {_locations::6} parsed as number)
+
+#-------parse location text------
+function parse_location_text(loc: location) :: text:
+	return "%{_loc}'s x-coordinate%,%{_loc}'s y-coordinate%,%{_loc}'s z-coordinate%,%{_loc}'s world%,%yaw of {_loc}%,%pitch of {_loc}%"
+
+#-------hub item----------
+function hub_item(p: player):
+	clear {_p}'s inventory
+	set slot 0 of {_p}'s inventory to compass named "&6メニュー"
+	set slot 8 of {_p}'s inventory to firework star named "&cHide players"
+
+#-------add world edit permissioin-------
+function worldedit_add_permission(p: player):
+	command "/pex user %{_p}% add worldedit.wand"
+	command "/pex user %{_p}% add worldedit.selection.pos"
+	command "/pex user %{_p}% add worldedit.region.set"
+	command "/pex user %{_p}% add worldedit.region.walls"
+	command "/pex user %{_p}% add worldedit.generation.cylinder"
+	command "/pex user %{_p}% add worldedit.region.replace"
+	command "/pex user %{_p}% add worldedit.clipboard.copy"
+	command "/pex user %{_p}% add worldedit.clipboard.paste"
+	command "/pex user %{_p}% add worldedit.clipboard.rotate"
+	command "/pex user %{_p}% add worldedit.clipboard.cut"
+	command "/pex user %{_p}% add worldedit.history.undo"
+	command "/pex user %{_p}% add worldedit.history.redo"
+	command "/pex user %{_p}% add worldedit.region.line"
+	command "/pex user %{_p}% add worldedit.region.move"
+	command "/pex user %{_p}% add worldedit.navigation.up"
+	command "/pex user %{_p}% add worldedit.navigation.down"
+	command "/pex user %{_p}% add worldedit.region.smooth"
+	command "/pex user %{_p}% add worldedit.selection.size"
+	command "/pex user %{_p}% add worldedit.brush.*"
+	command "/pex user %{_p}% add worldedit.clipboard.load"
+	command "/pex user %{_p}% add worldedit.schematic.load"
+	command "/pex user %{_p}% add worldedit.help"
+	command "/pex user %{_p}% add fawe.admin"
+
+function luckperms_setup():
+	#Default
+	command "/luckperms deletegroup default_command"
+	command "/luckperms creategroup default_command"
+	command "/luckperms group default_command permission set minecraft.command.weather true"
+	command "/luckperms group default_command permission set minecraft.command.time true"
+	command "/luckperms group default_command permission set minecraft.command.setblock true"
+
+	#Multiverse
+	command "/luckperms deletegroup multiverse"
+	command "/luckperms creategroup multiverse"
+	command "/luckperms group multiverse permission set multiverse.core.gamerule.set true"
+	command "/luckperms group multiverse permission set multiverse.core.gamerule.list true"
+
+	#WorldEdit
+	command "/luckperms deletegroup worldedit"
+	command "/luckperms creategroup worldedit"
+	command "/luckperms group worldedit permission set worldedit.wand true"
+	command "/luckperms group worldedit permission set worldedit.selection.pos true"
+	command "/luckperms group worldedit permission set worldedit.region.set true"
+	command "/luckperms group worldedit permission set worldedit.region.walls true"
+	command "/luckperms group worldedit permission set worldedit.generation.cylinder true"
+	command "/luckperms group worldedit permission set worldedit.region.replace true"
+	command "/luckperms group worldedit permission set worldedit.clipboard.copy true"
+	command "/luckperms group worldedit permission set worldedit.clipboard.paste true"
+	command "/luckperms group worldedit permission set worldedit.clipboard.rotate true"
+	command "/luckperms group worldedit permission set worldedit.clipboard.cut true"
+	command "/luckperms group worldedit permission set worldedit.history.undo true"
+	command "/luckperms group worldedit permission set worldedit.history.redo true"
+	command "/luckperms group worldedit permission set worldedit.region.line true"
+	command "/luckperms group worldedit permission set worldedit.region.move true"
+	command "/luckperms group worldedit permission set worldedit.navigation.up true"
+	command "/luckperms group worldedit permission set worldedit.navigation.down true"
+	command "/luckperms group worldedit permission set worldedit.region.smooth true"
+	command "/luckperms group worldedit permission set worldedit.selection.size true"
+	command "/luckperms group worldedit permission set worldedit.brush.* true"
+	command "/luckperms group worldedit permission set worldedit.clipboard.load true"
+	command "/luckperms group worldedit permission set worldedit.schematic.load true"
+	command "/luckperms group worldedit permission set worldedit.help true"
+
+	#VoxelSniper
+	command "/luckperms deletegroup voxelsniper"
+	command "/luckperms creategroup voxelsniper"
+	command "/luckperms group voxelsniper permission set voxelsniper.* true"
+
+#----------add permissioins group-------
+function add_permissions_group(p: player, world: text):
+	command "/luckperms user %{_p}% parent add default_command world=%{_world}%"
+	command "/luckperms user %{_p}% parent add multiverse world=%{_world}%"
+	command "/luckperms user %{_p}% parent add worldedit world=%{_world}%"
+	command "/luckperms user %{_p}% parent add voxelsniper world=%{_world}%"
+
+#----------remove permissioins group-------
+function remove_permissions_group(p: player, world: text):
+	command "/luckperms user %{_p}% parent remove default_command world=%{_world}%"
+	command "/luckperms user %{_p}% parent remove multiverse world=%{_world}%"
+	command "/luckperms user %{_p}% parent remove worldedit world=%{_world}%"
+	command "/luckperms user %{_p}% parent remove voxelsniper world=%{_world}%"
+
+#------------add minecraft permission-----
+function minecraft_add_permission(p: player):
+	command "/pex user %{_p}% add minecraft.command.weather"
+	command "/pex user %{_p}% add minecraft.command.time"
+	command "/pex user %{_p}% add minecraft.command.setblock"
+
+	#Multiverse
+	command "/pex user %{_p}% add multiverse.core.gamerule.set"
+	command "/pex user %{_p}% add multiverse.core.gamerule.list"
+
+#--------Ranking TOP-------
+function ranking_top(server: string, order: string) :: string:
+	if {_order} is "first":
+		loop {server::%{_server}%::ranking::*}:
+			set {_ranking_index::%loop-value%} to loop-index
+		{server::%{_server}%::ranking::*} is set
+		set {_ranking_max} to min({server::%{_server}%::ranking::*})
+		return {_ranking_index::%{_ranking_max}%}
+	if {_order} is "second":
+		loop {server::%{_server}%::ranking::*}:
+			set {_ranking_index::%loop-value%} to loop-index
+			set {_ranking_value::%loop-index%} to loop-value
+		set {_ranking_max} to min({_ranking_value::*})
+		set {_ranking_max_player} to {_ranking_index::%{_ranking_max}%}
+		delete {_ranking_value::%{_ranking_max_player}%}
+		delete {_ranking_index::*}
+		loop {_ranking_value::*}:
+			set {_ranking_index::%loop-value%} to loop-index
+		set {_ranking_max} to min({_ranking_value::*})
+		return {_ranking_index::%{_ranking_max}%}
+
+#------Average Time-------
+function average(obj: objects) :: number:
+	loop {_obj::*}:
+		loop-value is number
+		add loop-value to {_num}
+		add 1 to {_size}
+	return {_num} / {_size}
+
+#------size of ---------
+function size(obj: objects) :: integer:
+	if {_obj::*} is not set:
+		set {_size} to 0
+		return {_size}
+	loop {_obj::*}:
+		add 1 to {_size}
+	return {_size}
+
+#------global_ranking------
+function global_ranking(p: player) :: number:
+	if {playerdata.%{_p}%::global_ranking} is not set:
+		return size({allplayer::*})
+	loop {allplayer::*}:
+		{playerdata.%loop-value%::global_ranking} is set
+		set {_all_ranker::%loop-value%} to {playerdata.%loop-value%::global_ranking}
+		set {_all_ranker2::%loop-value%} to {playerdata.%loop-value%::global_ranking}
+	loop {_all_ranker::*}:
+		set {_ranker_index::%loop-value%} to loop-index
+	loop {_all_ranker::*}:
+		add 1 to {_rank}
+		set {_max_index} to max({_all_ranker2::*})
+		if {_ranker_index::%{_max_index}%} is {_p}:
+			return {_rank}
+		delete {_all_ranker2::%{_ranker_index::%{_max_index}%}%}
+	return size({allplayer::*})
+
+function EntityFromLocation(loc: location) :: entities:
+	loop all entities in radius 2 of {_loc}:
+		if location of loop-entity is {_loc}:
+			add loop-entity to {_e::*}
+	return {_e::*}
+
+command /ea <text>:
+	permission: siso
+	trigger:
+		evaluate arg 1
+#-----reverse variables-------
+function reversed(list: objects) :: objects:
+	loop size({_list::*}) times:
+		set {_index} to size({_list::*}) - loop-number - 1
+		add {_list::%{_index}%} to {_reversed::*}
+	return {_reversed::*}
+
+#------count down---------
+function countdown(p: players, count: number):
+	loop {_count} times:
+		send title "&6&l%{_count}%" to {_p::*} for 1 seconds
+		sound("ui.button.click", {_p::*})
+		remove 1 from {_count}
+		wait 1 seconds
+	send title "&6&lStart!" to {_p::*} for 1 seconds
+	sound("block.note.pling", {_p::*})
+
+function sound(sound: text, p: players, pitch: number = 1):
+	loop {_p::*}:
+		play sound {_sound} with volume 1 and pitch {_pitch} at loop-value for loop-value
+
+#-------------------
+#Checkpoint
+#-------------------
+
+#-----place check point sign-----
+on place of sign:
+	name of player's held item contain "チェックポイント"
+	set line 1 to "=========="
+	set line 2 to "&6&lCheckpoint"
+	set line 3 to "&3[Rightclick]"
+	set line 4 to "=========="
+
+#----set check point-----
+on right click on sign:
+	if player isn't on ground:
+		send "&c空中でチェックポイントは設定できません。"
+		stop
+	if {playerdata.%player%::practice_mode} is true:
+		send "&c練習モードの状態ではチェックポイントを設定できません"
+		stop
+	line 1 of clicked block is "=========="
+	line 2 of clicked block is "&6&lCheckpoint"
+	line 3 of clicked block is "&3[Rightclick]"
+	line 4 of clicked block is "=========="
+	send "&dチェックポイントを設定しました。"
+	set {playerdata.%player%::checkpoint} to location of player
+
+#-----------------------------
+#Timer
+#-----------------------------
+
+#-----Timer watch--------
+function timer(p: player):
+	{playerdata.%{_p}%::timer} is true
+	set {time.%{_p}%} to 0
+	while true:
+		wait 1 tick
+		set {time.%{_p}%} to {time.%{_p}%} + 0.01
+		set action bar of {_p} to "%{time.%{_p}%}%"
+		if {playerdata.%{_p}%::timer} is not set:
+			exit loop
+			stop
+		if {playerdata.%{_p}%::timer} >= 720:
+			send "&cタイムが10分を超えたので自動的にタイマーをストップしました" to {_p}
+			exit loop
+			stop
+
+#-------Timer start------
+on walking on lapis block:
+	gamemode of player is adventure or creative
+	{server::%{playerdata.%player%::joined_server}%::startpoint} is location of event-block
+	set {playerdata.%player%::timer} to true
+	if {playerdata.%player%::practice_mode} is true:
+		send "&c練習モードの状態ではタイマーは開始されません"
+		stop
+	timer(player)
+	send "&a%{playerdata.%player%::display_name}% &6Start"
+	sound("block.note.pling", player, 2)
+	delete {playerdata.%player%::checkpoint}
+
+#------Timer end--------
+on walking on diamond block:
+	gamemode of player is adventure or creative
+	{server::%{playerdata.%player%::joined_server}%::endpoint} is location of event-block
+	teleport player to {server::%{playerdata.%player%::joined_server}%::spawn}
+	if {playerdata.%player%::check} is true:
+		set {server::%{playerdata.%player%::joined_server}%::owner_time} to {time.%player%}
+		server_diff(player)
+		delete {playerdata.%player%::timer}
+		delete {playerdata.%player%::check}
+		server_item(player)
+		set gamemode of player to creative
+		send "&a難易度を設定してサーバーを公開しましょう。"
+		stop
+	if {playerdata.%player%::timer} is not true:
+		send "&4&lOops! あなたはタイマースタートのブロックを踏んでいなかったようだ！"
+		if {playerdata.%player%::owner} is not true:
+			add player to {server::%{playerdata.%player%::joined_server}%::goal::*}
+			add 1 to {playerdata.%player%::clears}
+		stop
+	if {playerdata.%player%::practice_mode} is true:
+		send "&c練習モードの状態ではクリアできません"
+		stop
+	delete {playerdata.%player%::timer}
+	send "&b%{playerdata.%player%::display_name}% &bEnded!"
+	sound("entity.player.levelup", player)
+	delete {playerdata.%player%::checkpoint}
+	send "&bTime:&a&l%{time.%player%} / 0.20%"
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		broadcast "&e%player%&6さんが&d%{playerdata.%player%::display_name}%&6をゴールしました。 &bTime:&a&l%{time.%player%} / 0.20%"
+	if {server::%{playerdata.%player%::joined_server}%::goal::*} do not contain player:
+		if {playerdata.%player%::owner} is not true:
+			add player to {server::%{playerdata.%player%::joined_server}%::goal::*}
+			add {playerdata.%player%::joined_server} to {playerdata.%player%::goal::*}
+			add 1 to {playerdata.%player%::clears}
+	if {server::%{playerdata.%player%::joined_server}%::permission::*} contain player:
+		send "&c運営はランキングに記録されません"
+		stop
+	if {playerdata.%player%::owner} is true:
+		if {server::%{playerdata.%player%::joined_server}%::owner_time} > {time.%player%}:
+			send "&a&lタイム更新 &9-%{server::%{playerdata.%player%::joined_server}%::owner_time} - {time.%player%}%"
+			set {server::%{playerdata.%player%::joined_server}%::owner_time} to {time.%player%}
+	else if {server::%{playerdata.%player%::joined_server}%::ranking::%player%} > {time.%player%}:
+		send "&a&lタイム更新 &9-%{server::%{playerdata.%player%::joined_server}%::ranking::%player%} - {time.%player%}%"
+		set {server::%{playerdata.%player%::joined_server}%::ranking::%player%} to {time.%player%}
+		if ranking_top({playerdata.%player%::joined_server}, "first") is "%player%":
+			broadcast "&e%player%&6さんが&d%{playerdata.%player%::display_name}%&6で&b&l一位&6になりました！ &bTime:&a&l%{time.%player%} / 0.20%"
+			if size({server::%{playerdata.%player%::joined_server}%::goal::*}) >= 1: #クリアしてる人数が1人以上だったら
+				if size({server::%{playerdata.%player%::joined_server}%::goal::*}) = 1:
+					stop
+				ranking_top({playerdata.%player%::joined_server}, "second") isn't "%player%"
+				add 1 to {playerdata.%player%::global_ranking}
+				set {_second_player} to ranking_top({playerdata.%player%::joined_server}, "second")
+				remove 1 from {playerdata.%{_second_player}%::global_ranking}
+				send "&6&l%{server::%{playerdata.%player%::joined_server}%::servername}%&cの一位を失いました..." to {_second_player} parsed as player
+	else if {server::%{playerdata.%player%::joined_server}%::ranking::%player%} is not set:
+		set {server::%{playerdata.%player%::joined_server}%::ranking::%player%} to {time.%player%}
+		if ranking_top({playerdata.%player%::joined_server}, "first") is "%player%":
+			broadcast "&e%player%&6さんが&d%{playerdata.%player%::display_name}%&6で&b&l一位&6になりました！ &bTime:&a&l%{time.%player%} / 0.20%"
+			if size({server::%{playerdata.%player%::joined_server}%::goal::*}) >= 1: #クリアしてる人数が1人以上だったら
+				add 1 to {playerdata.%player%::global_ranking}
+				set {_second_player} to ranking_top({playerdata.%player%::joined_server}, "second")
+				remove 1 from {playerdata.%{_second_player}%::global_ranking}
+				send "&6&l%{server::%{playerdata.%player%::joined_server}%::servername}%&cの一位を失いました..." to {_second_player} parsed as player
+			else if size({server::%{playerdata.%player%::joined_server}%::goal::*}) <= 0: #クリアしてる人数がいなかったら
+				add 1 to {playerdata.%player%::global_ranking}
+	rankingbar({server::%{playerdata.%player%::joined_server}%::playing::*})
+	rankingbar(player)
+	set_hologram({playerdata.%player%::joined_server})
+
+#---------Set start point------------
+on leftclick holding stick:
+	{playerdata.%player%::joining} is true
+	{playerdata.%player%::owner} is true
+	clicked block is set
+	clicked block isn't air
+	cancel event
+	if {server::%{playerdata.%player%::joined_server}%::startpoint} is set:
+		send "&c既にタイマー開始地点が設定されています。%nl%タイマー開始地点を削除して再度お試しください。"
+		stop
+	set {server::%{playerdata.%player%::joined_server}%::startpoint} to event-location
+	set {server::%{playerdata.%player%::joined_server}%::startpoint_text} to parse_location_text(event-location)
+	set block at location of event-location to lapis block
+	send "&6タイマー計測&a開始&6地点を設定しました。"
+
+#--------Set end point------------
+on rightclick holding stick:
+	{playerdata.%player%::joining} is true
+	{playerdata.%player%::owner} is true
+	clicked block is set
+	clicked block isn't air
+	cancel event
+	if {server::%{playerdata.%player%::joined_server}%::endpoint} is set:
+		send "&c既にタイマー終了地点が設定されています。%nl%タイマー終了地点を削除して再度お試しください。"
+		stop
+	set {server::%{playerdata.%player%::joined_server}%::endpoint} to event-location
+	set {server::%{playerdata.%player%::joined_server}%::endpoint_text} to parse_location_text(event-location)
+	set block at location of event-location to diamond block
+	send "&dタイマー計測&c終了&d地点を設定しました。"
+
+#-------Timer Ranking socreborad--------
+function rankingbar(p: player):
+	set {_high} to 9999
+	wipe {_p}'s sidebar
+	set name of sidebar of {_p} to "&6Time"
+	loop {server::%{playerdata.%{_p}%::joined_server}%::ranking::*}:
+		set {ranking::%loop-index%} to loop-value
+	if size({ranking::*}) >= 15:
+		set {_ranking.looptime} to 15
+	else:
+		set {_ranking.looptime} to "%size({ranking::*})%" parsed as number
+	loop {_ranking.looptime} times:
+		loop {ranking::*}:
+			loop-value-2 < {_high}
+			set {_high} to loop-value-2
+			set {_highplayer} to loop-index
+		if loop-number is 1:
+			set score "&e&l✯&f&d%{_highplayer}%&f：&l&b%{_high} / 0.20%秒" in sidebar of {_p} to 999 - loop-number
+		else:
+			set score "&e%{_highplayer}%&f：&l&b%{_high} / 0.20%秒" in sidebar of {_p} to 999 - loop-number
+		set score " " in sidebar of {_p} to 101
+		set score "&6平均タイム&f：&2&l%average({server::%{playerdata.%{_p}%::joined_server}%::ranking::*}) / 0.20%秒" in sidebar of {_p} to 100
+		set {_high} to 9999
+		delete {ranking::%{_highplayer}%}
+	delete {ranking::*}
+
+#------------------
+#Block Effect
+#-----------------
+on right click:
+	name of player's held item contain "ブロックエフェクト"
+	clicked block is set
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		if {playerdata.%player%::owner} is true:
+			send "&c公開したサーバーは""Server settings → サーバーを編集する""で再度編集ができます"
+			stop
+		else:
+			send "&cこのサーバーは既に公開済みなので編集ができません"
+			stop
+	open chest with 1 row named "&6Effect select" to player
+	set {effect_location.%player%} to location of event-block
+	set slot 0 of player's current inventory to feather named "&bSpeed"
+	set slot 1 of player's current inventory to rabbit hide named "&aJump"
+	set slot 2 of player's current inventory to light gray dye named "&7Levitation"
+	set slot 3 of player's current inventory to soul sand named "&8Slowness"
+	if {server::%{playerdata.%player%::joined_server}%::effect_location::*} contain location of event-block:
+		set slot 8 of player's current inventory to compass named "&c削除する"
+		set slot 7 of player's current inventory to compass named "&9編集する"
+
+on inventory click:
+	name of player's current inventory contain "Effect select" #step 1
+	cancel event
+	name of clicked item is set
+	if name of clicked item contain "編集する":
+		remove {effect_location.%player%} from {server::%{playerdata.%player%::joined_server}%::effect_location::*}
+		open chest with 1 row named "&6Effect select" to player
+		set slot 0 of player's current inventory to feather named "&bSpeed"
+		set slot 1 of player's current inventory to rabbit hide named "&aJump"
+	if {server::%{playerdata.%player%::joined_server}%::effect_location::*} contain {effect_location.%player%}:
+		set slot 8 of player's current inventory to compass named "&c削除する"
+		set slot 7 of player's current inventory to compass named "&9編集する"
+		stop
+	if name of clicked item contain "削除する":
+		remove {effect_location.%player%} from {server::%{playerdata.%player%::joined_server}%::effect_location::*}
+		delete {effect_time.%{effect_location.%player%}%}
+		delete {effect_lv.%{effect_location.%player%}%}
+		delete {effect.%{effect_location.%player%}%}
+		set block at {effect_location.%player%} to air
+		close player's inventory
+		send "&c削除しました。"
+		#オフラインデータ
+		set {_parse_loc} to parse_location_text({effect_location.%player%})
+		remove {_parse_loc} from {server::%{playerdata.%player%::joined_server}%::effect_location_text::*}
+		delete {effect_text.%{_parse_loc}%}
+		delete {effect_time_text.%{_parse_loc}%}
+		delete {effect_lv_text.%{_parse_loc}%}
+		stop
+	if name of clicked item contain "Speed":
+		set {effect.%{effect_location.%player%}%} to "speed" parsed as potion effect type
+	if name of clicked item contain "Jump":
+		set {effect.%{effect_location.%player%}%} to "jump boost" parsed as potion effect type
+	if name of clicked item contain "Levitation":
+		set {effect.%{effect_location.%player%}%} to "levitation" parsed as potion effect type
+	if name of clicked item contain "Slowness":
+		set {effect.%{effect_location.%player%}%} to "slowness" parsed as potion effect type
+	open chest with 1 row named "&6Effect lv select" to player
+	set slot 2 of player's current inventory to redstone named "&21Lvに設定する"
+	set slot 3 of player's current inventory to redstone named "&c1Lv下げる"
+	set slot 4 of player's current inventory to redstone block named "&6エフェクトレベル:&a&l%{effect_lv.%{effect_location.%player%}%}%Lv"
+	set slot 5 of player's current inventory to redstone named "&91Lv上げる"
+	set slot 6 of player's current inventory to redstone named "&3255Lvに設定する"
+	set slot 8 of player's current inventory to green wool named "&6決定する"
+
+on inventory click:
+	name of player's current inventory contain "Effect lv select"
+	cancel event
+	if clicked slot isn't 2 or 3 or 5 or 6 or 8:
+		stop
+	if name of clicked item contain "1Lv下げる":
+		if {effect_lv.%{effect_location.%player%}%} <= 1:
+			stop
+		remove 1 from {effect_lv.%{effect_location.%player%}%}
+		effect_inv_set_lv(player)
+		stop
+	if name of clicked item contain "1Lv上げる":
+		if {effect_lv.%{effect_location.%player%}%} >= 255:
+			stop
+		add 1 to {effect_lv.%{effect_location.%player%}%}
+		effect_inv_set_lv(player)
+		stop
+	if name of clicked item contain "1Lvに設定する":
+		set {effect_lv.%{effect_location.%player%}%} to 1
+		effect_inv_set_lv(player)
+		stop
+	if name of clicked item contain "255Lvに設定する":
+		set {effect_lv.%{effect_location.%player%}%} to 255
+		effect_inv_set_lv(player)
+		stop
+	if name of clicked item contain "決定する":
+		wait 1 tick #バグ防止
+		open chest with 1 row named "&6Effect Time select" to player
+		set slot 2 of player's current inventory to redstone named "&21秒に設定する"
+		set slot 3 of player's current inventory to redstone named "&c1秒下げる"
+		set slot 4 of player's current inventory to redstone block named "&6エフェクト付属時間:&a&l%{effect_time.%player%}%秒"
+		set slot 5 of player's current inventory to redstone named "&91秒上げる"
+		set slot 6 of player's current inventory to redstone named "&399999秒に設定する"
+		set slot 8 of player's current inventory to green wool named "&6決定する"
+
+on inventory click:
+	name of player's current inventory contain "Effect Time select"
+	cancel event
+	if clicked slot isn't 2 or 3 or 5 or 6 or 8:
+		stop
+	if name of clicked item contain "1秒下げる":
+		if {effect_time.%{effect_location.%player%}%} <= 1:
+			stop
+		remove 1 from {effect_time.%{effect_location.%player%}%}
+		effect_inv_set_time(player)
+		stop
+	if name of clicked item contain "1秒上げる":
+		add 1 to {effect_time.%{effect_location.%player%}%}
+		effect_inv_set_time(player)
+		stop
+	if name of clicked item contain "1秒に設定する":
+		set {effect_time.%{effect_location.%player%}%} to 1
+		effect_inv_set_time(player)
+		stop
+	if name of clicked item contain "99999秒に設定する":
+		set {effect_time.%{effect_location.%player%}%} to 99999
+		effect_inv_set_time(player)
+		stop
+	if name of clicked item contain "決定する":
+		add {effect_location.%player%} to {server::%{playerdata.%player%::joined_server}%::effect_location::*}
+		set {effect_time.%{effect_location.%player%}%} to "%{effect_time.%{effect_location.%player%}%}% seconds" parsed as timespan
+		if {effect.%{effect_location.%player%}%} is speed:
+			set block at {effect_location.%player%} to blue concrete
+		if {effect.%{effect_location.%player%}%} is jump boost:
+			set block at {effect_location.%player%} to green concrete
+		if {effect.%{effect_location.%player%}%} is levitation:
+			set block at {effect_location.%player%} to white concrete
+		if {effect.%{effect_location.%player%}%} is slowness:
+			set block at {effect_location.%player%} to dark gray concrete
+		close player's inventory
+		send "&a設定が完了しました。"
+		#オフラインデータ
+		set {_parse_loc} to parse_location_text({effect_location.%player%})
+		add {_parse_loc} to {server::%{playerdata.%player%::joined_server}%::effect_location_text::*}
+		set {effect_text.%{_parse_loc}%} to {effect.%{effect_location.%player%}%}
+		set {effect_time_text.%{_parse_loc}%} to {effect_time.%{effect_location.%player%}%}
+		set {effect_lv_text.%{_parse_loc}%} to {effect_lv.%{effect_location.%player%}%}
+
+on walking on blue concrete or green concrete or white concrete or dark gray concrete:
+	gamemode of player is adventure or creative
+	{server::%{playerdata.%player%::joined_server}%::effect_location::*} contain location of event-block
+	#{effect_double.%player%} is not set
+	#set {effect_double.%player%} to true
+	command "/effect %player% clear"
+	apply {effect.%location of event-block%} of tier {effect_lv.%location of event-block%} to player for {effect_time.%location of event-block%}
+	#wait {effect_time.%location of event-block%} parsed as timespan
+	#delete {effect_double.%player%}
+
+on break of blue concrete or green concrete:
+	{server::%{playerdata.%player%::joined_server}%::effect_location::*} contain location of event-block
+	remove location of event-block from {server::%{playerdata.%player%::joined_server}%::effect_location::*}
+	delete {effect_time.%location of event-block%}
+	delete {effect_lv.%location of event-block%}
+	delete {effect.%location of event-block%}
+	send "&cポーションブロックを削除しました"
+
+function effect_inv_set_lv(p: player):
+	set slot 2 of {_p}'s current inventory to redstone named "&21Lvに設定する"
+	set slot 3 of {_p}'s current inventory to redstone named "&c1Lv下げる"
+	set slot 4 of {_p}'s current inventory to redstone block named "&6エフェクトレベル:&a&l%{effect_lv.%{effect_location.%{_p}%}%}%Lv"
+	set slot 5 of {_p}'s current inventory to redstone named "&91Lv上げる"
+	set slot 6 of {_p}'s current inventory to redstone named "&3255Lvに設定する"
+	set slot 8 of {_p}'s current inventory to green wool named "&6決定する"
+
+function effect_inv_set_time(p: player):
+	set slot 2 of {_p}'s current inventory to redstone named "&21秒に設定する"
+	set slot 3 of {_p}'s current inventory to redstone named "&c1秒下げる"
+	set slot 4 of {_p}'s current inventory to redstone block named "&6エフェクト付属時間:&a&l%{effect_time.%{effect_location.%{_p}%}%}%秒"
+	set slot 5 of {_p}'s current inventory to redstone named "&91秒上げる"
+	set slot 6 of {_p}'s current inventory to redstone named "&399999秒に設定する"
+	set slot 8 of {_p}'s current inventory to green wool named "&6決定する"
+
+#-------------
+#Item
+#------------
+
+#------Hide & Reveal------
+on rightclick with firework star:
+	name of player's held item contain "hide players"
+	if {playerdata.%player%::hide} is not set:
+		hide all players from player
+		send "&6周りのプレイヤーを非表示にしました"
+		set {playerdata.%player%::hide} to true
+	else:
+		reveal all players from players
+		send "&6周りのプレイヤーを表示するようにしました"
+		delete {playerdata.%player%::hide}
+		stop
+
+#------Return server spawn-------
+on rightclick holding eye of ender:
+	name of player's held item contain "チェックポイントに戻る"
+	{playerdata.%player%::room::room} is not set #asure_room
+	cancel event
+	set time of player's world to {server::%{playerdata.%player%::joined_server}%::world_time}
+	#更新すると重いので無効
+	#if {playerdata.%player%::hide_scoreboard} is not true:
+		#rankingbar(player)
+	if {playerdata.%player%::checkpoint} is set:
+		teleport player to {playerdata.%player%::checkpoint}
+		stop
+	if {server::%{playerdata.%player%::joined_server}%::spawn} is set:
+		teleport player to {server::%{playerdata.%player%::joined_server}%::spawn}
+		delete {playerdata.%player%::timer}
+		stop
+	else:
+		teleport player to location at (0, 20, 0)
+		delete {playerdata.%player%::timer}
+		stop
+
+#------practice mode-------
+on rightclick holding feather:
+	name of player's held item contain "練習モード"
+	{playerdata.%player%::joining} is true
+	delete {playerdata.%player%::timer}
+	delete {playerdata.%player%::checkpoint}
+	teleport player to {server::%{playerdata.%player%::joined_server}%::spawn}
+	if {playerdata.%player%::practice_mode} is not set:
+		set {playerdata.%player%::practice_mode} to true
+		set player's flight mode to true
+		send "&a練習モードになりました"
+		send "&6/cpでチェックポイント設定、/dcでチェックポイントを削除できます"
+		stop
+	else if {playerdata.%player%::practice_mode} is true:
+		delete {playerdata.%player%::practice_mode}
+		set player's flight mode to false
+		send "&c練習モードを解除しました"
+		stop
+
+#------return server edit------
+on rightclick holding grass:
+	name of player's held item contain "サーバー編集に戻る"
+	{playerdata.%player%::check} is true
+	delete {playerdata.%player%::check}
+	clear player's inventory
+	set gamemode of player to creative
+	server_item(player)
+
+#------Hub menu---------
+on rightclick holding compass:
+	cancel event
+	name of player's held item contain "メニュー"
+	{playerdata.%player%::joining} isn't true
+	main_menu(player)
+
+#------server show item--------
+on rightclick holding map:
+	cancel event
+	name of player's held item contain "アスレチック"
+	show_server_list(player)
+
+#------show server infomation--------
+on rightclick holding book:
+	cancel event
+	name of player's held item contain "アスレチックの情報"
+	{playerdata.%player%::joined_server} is set
+	set {_server} to {playerdata.%player%::joined_server}
+	open chest with 1 row named "%{server::%{_server}%::servername}% &6Information" to player
+	set slot 0 of player's current inventory to book named "%{server::%{_server}%::servername}%" with lore "&9Start: &3%{server::%{_server}%::startpoint}%" and "&bEnd: &3%{server::%{_server}%::endpoint}%" and "&eRanked: &3%{server::%{_server}%::ranked}%"
+	set slot 2 of player's current inventory to pink dye named "&dいいねする"
+	set slot 3 of player's current inventory to paper named "&6コメントする" with lore "&c> ただの批判" and "&c> 製作者に対する誹謗中傷" and "&c上記の事は書き込まないでください"
+
+on inventory click:
+	{playerdata.%player%::joined_server} is set
+	set {_server} to {playerdata.%player%::joined_server}
+	name of player's current inventory contain "%{server::%{_server}%::servername}% &6Information"
+	cancel event
+	if name of clicked item contain "いいねする":
+		if {playerdata.%player%::iine_point} <= 0:
+			send "&cいいねポイントが足りません、いいねポイントをゲットするにはサーバーなどを作りましょう"
+			close player's inventory
+			stop
+		if {server::%{_server}%::iine::%player%} is true:
+			send "&c既にこのサーバーにいいねしています"
+			stop
+		add 1 to {server::%{_server}%::iine}
+		remove 1 from {playerdata.%player%::iine_point}
+		send "&a%{server::%{_server}%::servername}%&6にいいねしました！"
+		if {server::%{_server}%::owner} is online:
+			send "&e%player%&6さんが&a%{server::%{_server}%::servername}%&6にいいねをしました！" to {server::%{_server}%::owner} parsed as player
+		set {server::%{_server}%::iine::%player%} to true
+		close player's inventory
+		stop
+	if name of clicked item contain "コメントする":
+		close player's inventory
+		open anvil gui named "server_comment" with icon paper text "コメントを入力" for player
+
+#------comment reply-----
+on leftclick:
+	if targeted entity is hologram:
+		if distance between location of player and targeted entity < 4:
+			open anvil gui named "server_comment_reply" with icon paper text "返信を入力" for player
+
+#------return hub-----
+on rightclick holding clay brick item:
+	name of player's held item contain "ロビーに戻る"
+	execute player command "/back"
+
+#------------
+#Event
+#-----------
+
+options:
+	e: &d&l[イベント]&f
+
+command /event [<text>] [<text>]:
+	permission: siso
+	trigger:
+		if arg 1 is not set:
+			send "&6/event &acreate (name)"
+			send "&6/event &b(open|close|end|delete|info)"
+			stop
+		if arg 1 is set:
+			if arg 1 isn't "create":
+				if {event::server} is not set:
+					send "&cエラー、サーバーを作成してください"
+					stop
+		if arg 1 is "create":
+			if arg 2 is not set:
+				send "&cエラー"
+				stop
+			set {_set_server_id} to random 3 char string from `a-z0-9`
+			if {event::ids::*} contain {_set_server_id}:
+				send "&cエラー"
+				stop
+			set {event::server} to {_set_server_id}
+			set {event::server::name} to arg 2
+			add {_set_server_id} to {event::ids::*}
+			send "&6イベントサーバーを作成しました、&a(%arg 2%)"
+			command "/mv clone Baseworld %{_set_server_id}%"
+			command "/mv tp %player% %{_set_server_id}%"
+			event_item(player)
+			stop
+		if arg 1 is "lore":
+			if arg 2 is not set:
+				send "&cエラー"
+				stop
+			set {event::lore} to colored arg 2
+			send "%arg 2%にloreを設定"
+			stop
+		if arg 1 is "open":
+			broadcast "{@e} &aイベントサーバーが開かれました！"
+			set {event::open} to true
+			stop
+		if arg 1 is "close":
+			broadcast "{@e} &7イベントサーバーが閉じられました"
+			command "/mv unload %{event::server}%"
+			delete {event::open}
+			stop
+		if arg 1 is "end":
+			broadcast "{@e} &bイベントが終了しました！！"
+			command "/mv unload %{event::server}%"
+			delete {event::open}
+			stop
+		if arg 1 is "delete":
+			send "&aサーバーを削除しました、イベントワールドは&b(/mv tp %{event::server}%)&aで訪れられます"
+			add {event::server} to {event::log::*}
+			delete {event::*}
+			delete {event::start::*}
+			delete {event::end::*}
+			delete {event::ranking::*}
+			stop
+		if arg 1 is "info":
+			send "ID: %{event::server}%"
+			send "Name: %{event::server::name}%"
+			send "Open: %{event::open}%"
+			stop
+			
+
+#-----inv click #70 details----
+on inventory click:
+	name of player's current inventory contain "Main menu"
+	name of clicked item contain "イベント開催中"
+	cancel event
+	set gamemode of player to adventure
+	set {playerdata.%player%::display_name} to {event::server::name} #表示する名前
+	set {playerdata.%player%::joined_server} to {event::server}
+	command "/mv tp %player% %{playerdata.%player%::joined_server}%" #server TP
+	set {playerdata.%player%::joining} to true #player joined
+	event_ranking(player)
+	wait 1 tick  #ワールド間の移動を考慮
+	if {event::spawn} is set:
+		teleport player to {event::spawn}
+	else:
+		teleport player to location at (0, 4, 0)
+	event_item(player)
+
+#-----event item-----
+function event_item(p: player):
+	clear {_p}'s inventory
+	set slot 0 of {_p}'s inventory to eye of ender named "&6スタート地点に戻る &d[イベント]"
+	set slot 1 of {_p}'s inventory to clay brick item named "&3ロビーに戻る"
+	if {_p} is ops:
+		set slot 7 of {_p}'s inventory to firework star named "&cHide players"
+	else:
+		set slot 8 of {_p}'s inventory to firework star named "&cHide players"
+	if {_p} is ops:
+		set slot 8 of {_p}'s inventory to clock named "&3Event Settings"
+
+#-----event settings----
+on rightclick holding clock:
+	name of player's held item contain "Event settings"
+	open chest with 1 row named "&6Event settings" to player
+	set slot 0 of player's current inventory to gold block named "&6spawn point"
+	set slot 1 of player's current inventory to stick named "&3Start & end"
+
+#-------event settings inv-----------
+on inventory click:
+	if name of player's current inventory contain "Event settings":
+		cancel event
+		if name of clicked item contain "spawn point":
+			set {event::spawn} to location of player
+			send "set spawn point"
+			stop
+		if name of clicked item contain "Start & end":
+			give stick named "set start end" to player
+			stop
+
+#------event start & end------
+#--------start---------
+on leftclick holding stick:
+	name of player's held item contain "set start end"
+	clicked block is set
+	clicked block isn't air
+	cancel event
+	add location of event-location to {event::start::*}
+	set block at location of event-location to lapis block
+	send "&6Start add"
+
+#----end-----
+on rightclick holding stick:
+	name of player's held item contain "set start end"
+	clicked block is set
+	clicked block isn't air
+	cancel event
+	add location of event-location to {event::end::*}
+	set block at location of event-location to diamond block
+	send "&dEnd add"
+
+#-------Timer start------
+on walking on lapis block:
+	gamemode of player is adventure or creative
+	{event::start::*} contain location of event-block
+	send "{@e} &b%{playerdata.%player%::display_name}% &6Start"
+	set {playerdata.%player%::timer} to true
+	delete {playerdata.%player%::checkpoint}
+	timer(player)
+
+#------Timer end--------
+on walking on diamond block:
+	gamemode of player is adventure or creative
+	{event::end::*} contain location of event-block
+	if {playerdata.%player%::timer} is not true:
+		send "&cTimerスタートブロックを踏んでいません"
+		stop
+	delete {playerdata.%player%::timer}
+	teleport player to {event::spawn}
+	broadcast "{@e} &e%player%&6が%{playerdata.%player%::display_name}%&6をゴールしました。 &aTime:&d&l%{time.%player%}%"
+	if {event::ranking::%player%} > {time.%player%}:
+		send "&a&lタイム更新 &9-%{event::ranking::%player%} - {time.%player%}%"
+		set {event::ranking::%player%} to {time.%player%}
+		if ranking_top({playerdata.%player%::joined_server}, "first") is "%player%":
+			broadcast "{@e} &e%player%&6さんが&d%{playerdata.%player%::display_name}%&6で&b&lTop&6になりました！ &bTime:&a&l%{time.%player%}%"
+	else if {event::ranking::%player%} is not set:
+		set {event::ranking::%player%} to {time.%player%}
+	event_ranking(player)
+	stop
+	
+#---------event ranking------
+function event_ranking(p: player):
+	set {_high} to 9999
+	wipe {_p}'s sidebar
+	set name of sidebar of {_p} to "&d&lEvent Ranking"
+	loop {event::ranking::*}:
+		set {ranking::%loop-index%} to loop-value
+	if size({ranking::*}) >= 15:
+		set {_ranking.looptime} to 15
+	else:
+		set {_ranking.looptime} to "%size({ranking::*})%" parsed as number
+	loop {_ranking.looptime} times:
+		loop {ranking::*}:
+			loop-value-2 < {_high}
+			set {_high} to loop-value-2
+			set {_highplayer} to loop-index
+		if loop-number is 1:
+			set score "&e&lTop Player &f&d%{_highplayer}%&f：&l&b%{_high} / 0.20%秒" in sidebar of {_p} to 999 - loop-number
+		else:
+			set score "&e%{_highplayer}%&f：&l&b%{_high} / 0.20%秒" in sidebar of {_p} to 999 - loop-number
+		set score " " in sidebar of {_p} to 101
+		set score "&6平均タイム&f：&2&l%average({event::ranking::*})%" in sidebar of {_p} to 100
+		set {_high} to 9999
+		delete {ranking::%{_highplayer}%}
+	delete {ranking::*}
+	delete {high_number}
+
+#------Return server spawn-------
+on rightclick holding eye of ender:
+	name of player's held item contain "&6スタート地点に戻る &d[イベント]"
+	cancel event
+	if {playerdata.%player%::checkpoint} is set:
+		teleport player to {playerdata.%player%::checkpoint}
+		stop
+	if {event::spawn} is set:
+		teleport player to {event::spawn}
+		delete {playerdata.%player%::timer}
+		stop
+	else:
+		teleport player to location at (0, 20, 0)
+		delete {playerdata.%player%::timer}
+		stop
+
+#---------------------
+#sever start & stop
+#---------------------
+on skript start:
+	execute console command "/difficulty 0"
+	execute console command "/mv load Baseworld"
+	set {server} to false
+	loop {server::id::*}:
+		delete {server::%loop-value%::playing::*}
+
+on skript stop:
+	stop
+
+#------------
+#Debug
+#------------
+command /debug [<text>] [<text>] [<text>]:
+	permission: siso
+	trigger:
+		if arg 1 is not set:
+			send "&3&l/debug &6&l(player|info|delete|set)"
+			send "&3&ldelete (startpoint|endpoint)"
+			send "&3&ldelete official [<server name>]"
+			send "&3&ldelete ranking [<player name>]"
+			send "&3&ldelete release"
+			send "&3&lset (ranked|ultimate)"
+			send "&3&lset official [<server name>]"
+			send "&3&lcomment"
+			send "&3&lbanned_create (player name) [<reason>]"
+			send "&3&lbanned_delete (player name)"
+			send "&3&lroom (open|close)"
+			send "&dOfficialを設定する場合ワールド名を英語にすることを推奨します (mvのワールド名を日本語にするとエラーが起こるため)"
+			stop
+		if arg 1 is "info":
+			send "&3Server name: %{server::%{playerdata.%player%::joined_server}%::servername}%"
+			send "&3Server id: %{playerdata.%player%::joined_server}%"
+			send "&3Startpoint: %{server::%{playerdata.%player%::joined_server}%::startpoint}%"
+			send "&3Endpoint: %{server::%{playerdata.%player%::joined_server}%::endpoint}%"
+			send "&3Release: %{server::%{playerdata.%player%::joined_server}%::relese}%"
+			send "&3Ranked: %{server::%{playerdata.%player%::joined_server}%::ranked}%"
+			send "&3Ultimate: %{server::%{playerdata.%player%::joined_server}%::ultimate}%"
+			send "&3Official: %{server::%{playerdata.%player%::joined_server}%::official}%"
+			stop
+		if arg 1 is "set":
+			if arg 2 is "ranked":
+				set {server::%{playerdata.%player%::joined_server}%::ranked} to true
+				send "set ranked"
+				stop
+			if arg 2 is "ultimate":
+				set {server::%{playerdata.%player%::joined_server}%::ultimate} to true
+				send "set ultimate"
+				stop
+			if arg 2 is "official":
+				if {server::id::*} contain player's world:
+					send "&c既にこのMAPは他のプレイヤーが所有しているかofficialになっています"
+					stop
+				if arg 3 is not set:
+					send "&cサーバー名を設定してください"
+					stop
+				set {_set_server_id} to player's world
+				add "%player's world%" to {server::id::*} #システムデータ
+				add arg 3 to {server::name::*}
+				set {server::%{_set_server_id}%::defaultservername} to arg 3 #IDからサーバーの名前
+				set {server::%arg 3%::id} to "%{_set_server_id}%" #サーバー名からID
+				set {server::%{_set_server_id}%::servername} to arg 3 #サーバーの名前を変更した際に使用
+				set {server::%{_set_server_id}%::owner} to player
+				add "%player's world%" to {officialmap::*}
+				set {server::%{playerdata.%player%::joined_server}%::official} to true
+				send "&b---official details---"
+				send "&3ID: %{_set_server_id}%"
+				send "&3Name: %arg 3%"
+				send "&3Owner: %player%"
+				send "&b------------------------"
+				set {playerdata.%player%::joined_server} to {_set_server_id}
+				set {playerdata.%player%::owner} to true
+				set {playerdata.%player%::joining} to true
+				server_item(player)
+				stop
+		if arg 1 is "delete":
+			if arg 2 is "startpoint":
+				delete {server::%{playerdata.%player%::joined_server}%::startpoint}
+				send "deleted start"
+				stop
+			if arg 2 is "endpoint":
+				delete {server::%{playerdata.%player%::joined_server}%::endpoint}
+				send "deleted end"
+				stop
+			if arg 2 is "release":
+				delete {server::%{playerdata.%player%::joined_server}%::relese}
+				send "delete release"
+				stop
+			if arg 2 is "ranking":
+				if arg 3 is set:
+					delete {server::%{playerdata.%player%::joined_server}%::ranking::%arg 3%}
+					remove 1 from {playerdata.%arg 3%::global_ranking}
+					if size({server::%{playerdata.%player%::joined_server}%::goal::*}) >= 2:
+						set {_second_player} to ranking_top({playerdata.%player%::joined_server}, "second")
+						add 1 to {playerdata.%{_second_player}%::global_ranking}
+					send "%arg 3% ranking delete global_ranking %{playerdata.%arg 3%::global_ranking}%"
+					rankingbar(player)
+					stop
+				else:
+					send "&cランキング削除したいプレイヤー名を指定してください"
+					stop
+			if arg 2 is "ranked":
+				delete {server::%{playerdata.%player%::joined_server}%::ranked}
+				send "deleted ranked"
+				stop
+			if arg 2 is "official":
+				if arg 3 is set:
+					if {officialmap::*} do not contain arg 3:
+						send "&cそのMAPはofficialMAPではありません (IDで指定してください)"
+						stop
+					delete {server::%arg 3%::relese}
+					send "&c%arg 3% (%{server::%arg 3%::servername}%}を非公開にしました"
+					send "&c/mv tp %arg 3%で再度アクセスできます"
+					stop
+				else:
+					send "&cサーバーのIDを指定してください"
+					stop
+			else:
+				send "/debug delete (startpoint|endpoint)"
+				stop
+		if arg 1 is "comment":
+			set {_slots} to 0
+			open chest with 6 row named "&3コメントを管理する" to player
+			loop {server::%{playerdata.%player%::joined_server}%::comment::*}:
+				set {_split_comment::*} to loop-value split at "|"
+				set {_location} to parse_text_location(loop-index)
+				set slot {_slots} of player's current inventory to paper named {_split_comment::1} with lore "&6Player: &e%{_split_comment::2}%" and "&6Location: &9%{_location}%"
+				add 1 to {_slots}
+			stop
+		if arg 1 is "banned_create":
+			set {playerdata.%arg 2%::banned::create} to arg 3
+			send "&cbanned %arg 2% reason -> &4%arg 3%"
+			stop
+		if arg 1 is "banned_delete":
+			delete {playerdata.%arg 2%::banned::create}
+			send "&aunbanned %arg 2%"
+			stop
+		if arg 1 is "room": #room_asure
+			if arg 2 is "open":
+				delete {room_maintenance}
+				send "&aRoom OPEN"
+			if arg 2 is "close":
+				set {room_maintenance} to true
+				loop all players:
+					if {playerdata.%loop-player%::room::room} is set:
+						execute loop-player command "/back"
+				send "&aRoom Close"
+		else:
+			if {playerdata.%arg 1%::ids::*} is not set:
+				send "%arg 1% no server"
+				stop
+			if arg 2 is "info":
+				send "&3Server name: %{server::%{playerdata.%arg 1%::select_server}%::servername}%"
+				send "&3Server id: %{server::%{playerdata.%arg 1%::select_server}%::id}%"
+				send "&3Startpoint: %{server::%{playerdata.%arg 1%::select_server}%::startpoint}%"
+				send "&3Endpoint: %{server::%{playerdata.%arg 1%::select_server}%::endpoint}%"
+				stop
+			if arg 2 is "delete":
+				if arg 3 is "startpoint":
+					delete {server::%{playerdata.%arg 1%::select_server}%::startpoint}
+					send "deleted start"
+					stop
+				if arg 3 is "endpoint":
+					delete {server::%{playerdata.%arg 1%::select_server}%::endpoint}
+					send "deleted end"
+					stop
+				else:
+					send "/debug delete (startpoint|endpoint)"
+
+#-------------
+#Glitch check
+#-------------
+on creative inventory click:
+	if "%event-item%" contain "water bottle" or "lingering potion" or "splash potion":
+		cancel event
+		send "&cポーション類は取り出せません"
+		stop
+	if "%event-item%" contain "ender pearl":
+		cancel event
+		send "&cエンダーパールは使用できません"
+		stop
+	if "%event-item%" contain "tnt":
+		cancel event
+		send "&cTNTは使用できません"
+		stop
+	if "%event-item%" contain "barrier":
+		cancel event
+		send "&cバリアブロックは使用できません"
+		stop
+	if {server::%{playerdata.%player%::joined_server}%::elytra} is not true:
+		if "%event-item%" contain "elytra":
+			cancel event
+			send "&cエリトラMAPをONにしてください"
+			stop
+
+#Name Item
+on creative inventory click:
+	if name of event-item is set:
+		if event-item is chest or anvil:
+			cancel event
+			stop
+
+#Brewing
+on inventory click:
+	if name of event-inventory is "container.brewing":
+		cancel event
+		send "&c使用できません"
+		stop
+
+#Anvil
+on inventory click:
+	if name of event-inventory is "Repair":
+		cancel event
+		send "&c使用できません"
+		stop
+
+#------------
+#on command
+#-----------
+
+#-----add block command----
+command /cmdblock [<text>] [<text>]:
+	permission: siso
+	trigger:
+		send "今つかえない"
+		stop
+		if arg 1 is "add":
+			add arg 2 to {cmdblock::*}
+			send "&aAdd %arg 2%"
+			stop
+		if arg 1 is "remove":
+			remove arg 2 from {cmdblock::*}
+			send "&cRemove %arg 2%"
+			stop
+		if arg 1 is "check":
+			loop {cmdblock::*}:
+				send "&3&l%loop-value%"
+				stop
+		else:
+			send "&6/cmdblock (add|remove) (text)"
+
+#------worldedit-------
+#on command:
+	#loop {cmdblock::*}:
+		#command contains loop-value
+		#player is not ops
+		#{playerdata.%player%::joining} is not true
+		#cancel event
+		#stop
+
+on command:
+	command contain "/"
+	if command is "/wea":
+		stop
+	if {server::%{playerdata.%player%::joined_server}%::relese} is true:
+		cancel event
+		stop
+	player is not ops
+	{builder_permissions::%player%} is not set #Builder
+	{playerdata.%player%::joined_server} is not set
+	gamemode of player is not creative
+	cancel event
+	stop
+
+on command:
+	command contain "brush"
+	player is not ops
+	{playerdata.%player%::joining} is not true
+	cancel event
+	stop
+
+#------Normal command--------
+on command:
+	command contain "weather" or "time" or "difficulty" or "setblock"
+	player is not ops
+	{playerdata.%player%::joining} is not true
+	cancel event
+	stop
+
+#-----time set------
+on command:
+	command contain "time"
+	player is not ops
+	{playerdata.%player%::joining} is true
+	set {_args::*} to arguments
+	if {_args::2} is "day":
+		set player's world's time to 6:00
+	if {_args::2} is "night":
+		set player's world's time to 19:00
+	if {_args::2} is number:
+		send "&cdayとnightしか使用できません"
+		cancel event
+
+#------gamerule-------
+on command:
+	command contain "mv"
+	player is not ops
+	{playerdata.%player%::joining} is true
+	if command contain "mvrule":
+		cancel event
+		stop
+	set {_args::*} to arguments
+	{_args::1} contain "gamerule "
+	set {_args_split::*} to {_args::1} split at " "
+	if {_args_split::4} is set:
+		cancel event
+		stop
+
+#----------sk reload alert--------
+on command:
+	player is op
+	command contain "sk"
+	broadcast "&3&lSkriptのリロードをします"
+
+#------gamemode-----
+on command:
+	command contain "gamemode"
+	player is not ops
+	{playerdata.%player%::joining} is true
+	{playerdata.%player%::check} is not true
+	{server::%player's world%::relese} is not true
+	check [check [{playerdata.%player%::owner} is true] or check [{server::%{playerdata.%player%::joined_server}%::permission::*} contains player]] #サーバーのオーナーまたは権限持ちか
+	cancel event
+	set {_args::*} to arguments
+	if {_args::1} contain " ":
+		set {_args::*} to {_args::1} split at " "
+	if {_args::2} is not set:
+		if {_args::1} is "0" or "s" or "survival" or "1" or "c" or "creative" or "2" or "a" or "adventure" or "3" or "sp" or "spectator":
+			if {_args::1} is "0" or "０" or "s" or "survival":
+				set {_gm} to survival
+			if {_args::1} is "1" or "１" or "c" or "I" or "Ｉ" or "ⅰ" or "Ⅰ" or "creative":
+				set {_gm} to creative
+			if {_args::1} is "2" or "２" or "a" or "II" or "ＩＩ" or "ⅱ" or "Ⅱ" or "adventure":
+				set {_gm} to adventure
+			if {_args::1} is "3" or "３" or "sp" or "III" or "ＩＩＩ" or "ⅲ" or "Ⅲ" or "spectator":
+				set {_gm} to spectator
+			set gamemode of player to {_gm}
+			stop
+		else:
+			send "&cゲームモードを指定してください。"
+			stop
+	if {_args::2} is set: #プレイヤーを指定していたら
+		if {server::%{playerdata.%player%::joined_server}%::playing::*} contains {_args::2}: #指定したプレイヤーが遊んでるサーバーにいたら
+			{playerdata.%{_args::2}%::check} is not true
+			if {_args::1} is "0" or "s" or "survival" or "1" or "c" or "creative" or "2" or "a" or "adventure" or "3" or "sp" or "spectator":
+				if {_args::1} is "0" or "０" or "s" or "survival":
+					set {_gm} to survival
+				if {_args::1} is "1" or "１" or "c" or "I" or "Ｉ" or "ⅰ" or "Ⅰ" or "creative":
+					set {_gm} to creative
+				if {_args::1} is "2" or "２" or "a" or "II" or "ＩＩ" or "ⅱ" or "Ⅱ" or "adventure":
+					set {_gm} to adventure
+				if {_args::1} is "3" or "３" or "sp" or "III" or "ＩＩＩ" or "ⅲ" or "Ⅲ" or "spectator":
+					set {_gm} to spectator
+				set gamemode of {_args::2} parsed as player to {_gm}
+				stop
+			else:
+				send "&cゲームモードを指定してください。"
+				stop
+		else:
+			send "&cそのプレイヤーは&3%{server::%{playerdata.%player%::joined_server}%::servername}%&cで遊んでません"
+			stop
+
+#-----------------
+#entity click
+#----------------
+on right click on player:
+	{playerdata.%player%::joining} is not true
+	if size({playerdata.%clicked player%::ids::*}) is 0:
+		send "&e%clicked player%は&cサーバーを運営していません！" to event-player
+		stop
+	send "&e%clicked player%&6は&a&l%{server::%{playerdata.%clicked player%::select_server}%::servername}%を運営しています" to event-player
+
+#---------------------------
+#Hacker Ban (delete ranking)
+#---------------------------
+on command "/ban":
+	player is ops
+	set {_args::*} to arguments
+	{_args::1} is set
+	broadcast "&cBanned %{_args::1}%"
+	loop {playerdata.%{_args::1}%::goal::*}:
+		{server::%loop-value%::ranking::%{_args::1}%} is set
+		delete {server::%loop-value%::ranking::%{_args::1}%}
+		send "&cDelete ranking %loop-value%" to ops
+
+#------------------
+#Report
+#---------------
+command /report [<text>]:
+	trigger:
+		if arg 1 is not set:
+			send "&6/report (要件)"
+			stop
+		add "&e%player%&f:&6%arg 1%" to {report::*}
+		send "***Report*** %player%が通告：%arg 1%" to channel with id "559297856381648906" with "Lixey"
+
+command /reportlog:
+	permission: siso
+	trigger:
+		loop {report::*}:
+			send "%loop-value%"
+
+#-----------------
+#Damge
+#----------------
+
+on damage of player:
+	cancel event
+
+#------------------
+#item drop
+#------------------
+
+on drop:
+	if {playerdata.%player%::joining} isn't true:
+		cancel event
+	if {playerdata.%player%::check} is true:
+		cancel event
+
+#----------------
+#Player settings
+#----------------
+on rightclick holding totem of undying:
+	name of player's held item contain "Player settings"
+	open chest with 1 row named "&ePlayer settings" to player
+	if {playerdata.%player%::hide_players} is not set:
+		set slot 0 of player's current inventory to firework star named "&8Hide players"
+	if {playerdata.%player%::hide_players} is false:
+		set slot 0 of player's current inventory to firework star named "&8Hide players"
+	if {playerdata.%player%::hide_players} is true:
+		set slot 0 of player's current inventory to lime dye named "&aReveal players"
+
+	if {playerdata.%player%::hide_scoreboard} is not set:
+		set slot 1 of player's current inventory to empty map named "&8Hide scoreboard"
+	if {playerdata.%player%::hide_scoreboard} is false:
+		set slot 1 of player's current inventory to empty map named "&8Hide scoreboard"
+	if {playerdata.%player%::hide_scoreboard} is true:
+		set slot 1 of player's current inventory to empty map named "&aShow scoreboard"
+
+	if {playerdata.%player%::hide_comment} is not set:
+		set slot 2 of player's current inventory to book named "&8Hide comments"
+	if {playerdata.%player%::hide_comment} is false:
+		set slot 2 of player's current inventory to book named "&8Hide comments"
+	if {playerdata.%player%::hide_comment} is true:
+		set slot 2 of player's current inventory to book named "&8Show comments"
+
+	set slot 3 of player's current inventory to torch named "&cDelete checkpoint"
+
+on inventory click:
+	name of player's current inventory contain "Player settings"
+	clicked item is set
+	cancel event
+	if name of clicked item contain "Hide players":
+		hide all players from player
+		send "&c周りのプレイヤーを非表示にしました"
+		set {playerdata.%player%::hide_players} to true
+	if name of clicked item contain "Reveal players":
+		reveal all players from players
+		send "&a周りのプレイヤーを表示します"
+		set {playerdata.%player%::hide_players} to false
+
+	if name of clicked item contain "Hide scoreboard":
+		wipe player's sidebar
+		send "&cスコアボードを非表示にしました"
+		set {playerdata.%player%::hide_scoreboard} to true
+	if name of clicked item contain "Show scoreboard":
+		send "&aスコアボードを表示するようにしました"
+		set {playerdata.%player%::hide_scoreboard} to false
+
+	if name of clicked item contain "Hide comment":
+		if {server::%{playerdata.%player%::joined_server}%::comment_holograms::*} is not set:
+			send "&cこのサーバーにはコメントがありません"
+			stop
+		hide holograms {server::%{playerdata.%player%::joined_server}%::comment_holograms::*} from player
+		send "&cコメントを非表示にしました"
+		set {playerdata.%player%::hide_comment} to true
+	if name of clicked item contain "Show comment":
+		if {server::%{playerdata.%player%::joined_server}%::comment_holograms::*} is not set:
+			send "&cこのサーバーにはコメントがありません"
+			stop
+		reveal holograms {server::%{playerdata.%player%::joined_server}%::comment_holograms::*} to player
+		send "&aコメントを表示するようにしました"
+		set {playerdata.%player%::hide_comment} to false
+
+	if name of clicked item contain "Delete checkpoint":
+		delete {playerdata.%player%::checkpoint}
+		send "&cチェックポイントを削除しました"
+	close player's inventory
+
+#-------------
+#script reload
+#------------
+on script load:
+	set difficulty of all worlds to peaceful
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#			   Old Code
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#function show_server_list(p: player):
+	#open chest with 6 row named "&a&lServer list" to {_p}
+	#inv_sort_set({_p})
+	#set {_slots} to 11
+	#loop {server::id::*}:
+		#set {server.page.%{_p}%::%loop-index%} to loop-value
+	#loop {server.page.%{_p}%::*}:
+		#{server::%loop-value%::relese} is true
+		#if {_slots} is 43 + 1:
+			#set slot 53 of {_p}'s current inventory to arrow named "&3Next Page"
+			#stop
+		#if {_slots} is 17 or 26 or 35:
+			#add 3 to {_slots}
+		#if {server::%loop-value%::motd} is not set:
+			#if {server::%loop-value%::whitelist} is true:
+				#set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "&lWhitelist"
+			#else:
+				#set slot {_slots} of {_p}'s current inventory to emerald block named "&l%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%"
+		#else:
+			#if {server::%loop-value%::whitelist} is true:
+				#set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%" and "&lWhitelist"
+			#else:
+				#set slot {_slots} of {_p}'s current inventory to emerald block named "%{server::%loop-value%::servername}%" with lore "&a%size({server::%loop-value%::playing::*})%&7/∞" and "&6Owner&3:&a&l%{server::%loop-value%::owner}% &d&l❤&f:%{server::%loop-value%::iine}%" and "%{server::%loop-value%::motd}%"
+		#add 1 to {_slots}
+		#delete {server.page.%{_p}%::%loop-index%}

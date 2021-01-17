@@ -1,0 +1,245 @@
+#Create by しそ#1459
+
+options:
+	kit_select_item_id: 54 #キット選択画面を開くアイテムID (デフォルトではチェスト)
+
+function kit_create(p: player, kit_name: string):
+	loop {kitname::*}:
+		loop-index is {_kit_name}
+		send "&cその名前のkitは既に存在します" to {_p}
+		stop
+	open inventory "player" named "kit creater %{_kit_name}%" to {_p}
+	set slot 0 of {_p}'s current inventory to diamond named "&6一段目" with lore "&cクリックで削除"
+	set slot 9 of {_p}'s current inventory to coal named "&6四段目" with lore "&cクリックで削除"
+	set slot 18 of {_p}'s current inventory to iron ingot named "&6三段目" with lore "&cクリックで削除"
+	set slot 27 of {_p}'s current inventory to gold ingot named "&6二段目" with lore "&cクリックで削除"
+	set slot 13 of {_p}'s current inventory to wool named "&aDone" with lore "&6&lクリックで完了"
+
+on inventory click:
+	name of player's current inventory contain "kit creater"
+	if clicked slot is 0 or 9 or 18 or 27:
+		clicked item is diamond or coal or iron ingot or gold ingot
+		name of clicked item contain "段目"
+		set slot clicked slot of player's current inventory to air
+		stop
+	name of clicked item is "&aDone"
+	clicked slot is 13
+	set slot 13 of player's current inventory to air
+	set {_get_kit_name::*} to name of player's current inventory split at "kit creater "
+	set {_inv} to player's current inventory
+	loop 36 times:
+		set {kit::%{_get_kit_name::2}%::%loop-number - 1%} to slot loop-number - 1 of {_inv}
+	set {_while_num} to 0
+	while true:
+		wait 10 tick #バグで鯖落ちしないように対策
+		if {kit::%{_get_kit_name::2}%::%{_while_num}%} is not air:
+			set {kitname::%{_get_kit_name::2}%} to {kit::%{_get_kit_name::2}%::%{_while_num}%}
+			exit loop
+		add 1 to {_while_num}
+	close player's inventory
+	send "&6Kitを作成しました！ &a&l(%{_get_kit_name::2}%)"
+	stop
+
+command /kit [<text>] [<text>]:
+	permission: siso
+	trigger:
+		if arg 1 isn't set:
+			send "&9------Kit creater------"
+			send "&b/kit create (kit name)"
+			send "&b/kit (list|show|view)"
+			stop
+		if arg 1 is "create":
+			if arg 2 isn't set:
+				send "&cKitの名前を入力してください"
+				stop
+			kit_create(player, arg 2)
+			stop
+		if arg 1 is "view" or "list" or "show":
+			show_kit(player)
+			stop
+
+function show_kit(p: player):
+	open chest with 6 row named "&a&lKit list" to {_p}
+	inv_sort_set({_p})
+	set {_slots} to 10
+	delete {kit.page.%{_p}%::*}
+	loop {kitname::*}:
+		set {kit.page.%{_p}%::%loop-index%} to loop-value
+	loop {kit.page.%{_p}%::*}:
+		if {_slots} is 43 + 1:
+			set slot 53 of {_p}'s current inventory to arrow named "&3Next Page"
+			stop
+		if {_slots} is 17 or 26 or 35:
+			add 2 to {_slots}
+		set slot {_slots} of {_p}'s current inventory to loop-value named loop-index
+		add 1 to {_slots}
+		delete {kit.page.%{_p}%::%loop-index%}
+
+on inventory click:
+	if name of player's current inventory contain "Kit list":
+		cancel event
+		name of clicked item is set
+		clicked slot isn't 0
+		clicked item isn't green glass pane
+		if name of clicked item isn't "&3Next Page":
+			open chest with 1 row named "Kit Menu" to player
+			set slot 2 of player's current inventory to writable book named "%name of clicked item%の名前を変更する"
+			set slot 4 of player's current inventory to crafting table named "%name of clicked item%の内容を編集する"
+			set slot 6 of player's current inventory to barrier block named "%name of clicked item%を削除する"
+			stop
+		if name of clicked item is "&3Next Page":
+			open chest with 6 row named "&a&lKit list" to player
+			inv_sort_set(player)
+			set {_slots} to 10
+			loop {kit.page.%player%::*}:
+				if {_slots} is 43 + 1:
+					set slot 53 of player's current inventory to arrow named "&3Next Page"
+					stop
+				if {_slots} is 17 or 26 or 35:
+					add 2 to {_slots}
+				set slot {_slots} of player's current inventory to loop-value named loop-index
+				add 1 to {_slots}
+				delete {kit.page.%player%::%loop-index%}
+			stop
+	if name of player's current inventory contain "Kit Menu":
+		if name of clicked item contain "の名前を変更する":
+			clicked slot is 2
+			set {_get_kit_name::*} to name of clicked item split at "の名前を変更する"
+			set {kit_name_change.%player%} to {_get_kit_name::1}
+			close player's inventory
+			send "&aチャット欄に新しいKitの名前を入力してください、&cキャンセルする場合はcancelと言ってください"
+			stop
+		if name of clicked item contain "の内容を編集する":
+			clicked slot is 4
+			set {_get_kit_name::*} to name of clicked item split at "の内容を編集する"
+			open inventory "player" named "Kit show %{_get_kit_name::1}%" to player
+			send "%{_get_kit_name::1}%"
+			loop {kit::%{_get_kit_name::1}%::*}:
+				set slot loop-index parsed as number of player's current inventory to loop-value
+			stop
+		if name of clicked item contain "を削除する":
+			clicked slot is 6
+			set {_get_kit_name::*} to name of clicked item split at "を削除する"
+			open chest with 1 row named "Kit delete %{_get_kit_name::1}%" to player
+			set slot 2 of player's current inventory to light green wool named "&a削除する"
+			set slot 4 of player's current inventory to barrier block named "&6削除するKit:&a&l%{_get_kit_name::1}%"
+			set slot 6 of player's current inventory to red wool named "&cキャンセル"
+			stop
+#Kit Edit
+	if name of player's current inventory contain "Kit show":
+		if clicked item isn't air:
+			name of clicked item isn't "&aDone"
+			clicked slot isn't 13
+			set slot 13 of player's current inventory to wool named "&aDone" with lore "&6&lクリックで編集完了"
+			stop
+		if name of clicked item is "&aDone":
+			clicked slot is 13
+			cancel event
+			set slot 13 of player's current inventory to air
+			set {_get_kit_name::*} to name of player's current inventory split at "Kit show "
+			set {_inv} to player's current inventory
+			delete {kit::%{_get_kit_name::2}%::*} #いったん削除
+			loop 36 times:
+				set {kit::%{_get_kit_name::2}%::%loop-number - 1%} to slot loop-number - 1 of {_inv}
+			set {_while_num} to 0
+			while true:
+				wait 10 tick #バグで鯖落ちしないように対策
+				if {kit::%{_get_kit_name::2}%::%{_while_num}%} is not air:
+					set {kitname::%{_get_kit_name::2}%} to {kit::%{_get_kit_name::2}%::%{_while_num}%}
+					exit loop
+				add 1 to {_while_num}
+			show_kit(player)
+			send "&6Kitを編集しました！ &a&l(%{_get_kit_name::2}%)"
+			stop
+#Kit delete
+	if name of player's current inventory contain "Kit delete":
+		cancel event
+		clicked slot is 2 or 4 or 6
+		set {_get_kit_name::*} to name of player's current inventory split at "Kit delete "
+		if name of clicked item is "&a削除する":
+			delete {kit::%{_get_kit_name::2}%::*}
+			delete {kitname::%{_get_kit_name::2}%}
+			send "&aKitを削除しました"
+			show_kit(player)
+			stop
+		if name of clicked item contain "キャンセル":
+			show_kit(player)
+			send "&cキャンセルしました"
+			stop
+
+#^---kit name change--
+on chat:
+	{kit_name_change.%player%} is set
+	cancel event
+	if message contain "cancel":
+		send "&cキャンセルしました"
+		delete {kit_name_change.%player%}
+		stop
+	if message contain "&":
+		send "&c色は使用できません"
+		delete {kit_name_change.%player%}
+		stop
+	loop {kit::%{kit_name_change.%player%}%::*}: #old Kitを呼び出して新Kitにコピー 名前変えたから
+		set {kit::%message%::%loop-index%} to loop-value #new Kit
+	set {_while_num} to 0
+	while true:
+		wait 10 tick #バグで鯖落ちしないように対策
+		if {kit::%message%::%{_while_num}%} is not air:
+			set {kitname::%message%} to {kit::%message%::%{_while_num}%}
+			exit loop
+		add 1 to {_while_num}
+	delete {kit::%{kit_name_change.%player%}%::*} #不要なKitを削除
+	delete {kitname::%{kit_name_change.%player%}%}
+	send "&6%{kit_name_change.%player%}%を&a%message%に変更しました"
+	delete {kit_name_change.%player%}
+	show_kit(player)
+	stop
+
+function inv_sort_set(p: player):
+	loop 54 times: #6 row
+		if loop-number - 1 is 0:
+			if loop-number - 1 is 0:
+				set slot 0 of {_p}'s current inventory to nametag named "&9Kitを細かく探す"
+			continue
+		if loop-number - 1 >= 10:
+			if loop-number - 1 <= 43:
+				loop-number - 1 is not 17 or 18 or 26 or 27 or 35 or 36 or 46
+				if slot loop-number - 1 of {_p}'s current inventory is not air:
+					set slot loop-number - 1 of {_p}'s current inventory to air
+				continue
+		set slot loop-number - 1 of {_p}'s current inventory to green glass pane named "&r"
+
+#------------実用----------
+function kit_select(p: player):
+	open chest with 6 row named "&a&lKit select" to {_p}
+	inv_sort_set({_p})
+	set {_slots} to 10
+	delete {kit.page.%{_p}%::*}
+	loop {kitname::*}:
+		set {kit.page.%{_p}%::%loop-index%} to loop-value
+	loop {kit.page.%{_p}%::*}:
+		if {_slots} is 43 + 1:
+			set slot 53 of {_p}'s current inventory to arrow named "&3Next Page"
+			stop
+		if {_slots} is 17 or 26 or 35:
+			add 2 to {_slots}
+		set slot {_slots} of {_p}'s current inventory to loop-value named "&6%loop-index%"
+		add 1 to {_slots}
+
+on inventory click:
+	name of player's current inventory contain "Kit select"
+	cancel event
+	name of clicked item is set
+	clicked slot isn't 0
+	clicked item isn't green glass pane
+	close player's inventory
+	clear player's inventory
+	loop {kit::%uncolored name of clicked item%::*}:
+		set slot loop-index parsed as number of player's inventory to loop-value
+
+on rightclick:
+	if id of event-item is {@kit_select_item_id}:
+		kit_select(player)
+
+on skript start:
+	send "Kit createrがロードされました" to console

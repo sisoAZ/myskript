@@ -1,0 +1,1156 @@
+#ROom Join ok
+#game_endのタイム表示 & ポイント加算表示 ok
+#平均タイムスコアボードに表示 ok
+#ギブアップ &　強制終了 ok
+#時間切れ ok
+#ROOM自動閉鎖　（ひと0人の時) ok
+#待機状態のスコアボード ok
+
+#Release Fix :882, :657~659
+
+function room_menu(p: player):
+	open chest with 1 row named "&9&lRoom Menu" to {_p}
+	if {playerdata.%{_p}%::room_exist} is not set:
+		set slot 4 of {_p}'s current inventory to ender chest named "&6部屋作成"
+		set slot 2 of {_p}'s current inventory to jukebox named "&6部屋を探す"
+	else:
+		if "%{_p}%_room" parsed as world is loaded:
+			set slot 4 of {_p}'s current inventory to door named "&d部屋に参加する"
+			set slot 6 of {_p}'s current inventory to quartz ore named "&c部屋を閉じる"
+		else:
+			set slot 4 of {_p}'s current inventory to firework rocket named "&a部屋を開ける"
+			set slot 6 of {_p}'s current inventory to tnt named "&4部屋を削除する" with lore "&4部屋の建築物などがすべて削除されます、注意してください"
+		set slot 2 of {_p}'s current inventory to jukebox named "&6部屋を探す"
+		
+
+
+on inventory click:
+	name of player's current inventory contain "Room Menu"
+	name of clicked item is set
+	cancel event
+
+	if name of clicked item contain "部屋作成":
+		room_settings(player)
+	
+	#-------if room opened--------
+	if name of clicked item contain "部屋に参加する":
+		room_join(player, player)
+
+	if name of clicked item contain "部屋を閉じる":
+		room_close(player)
+	
+	#------if room closed-----------
+	if name of clicked item contain "部屋を開ける":
+		room_open(player)
+	
+	if name of clicked item contain "部屋を削除する":
+		room_delete(player)
+	
+	if name of clicked item contain "部屋を探す":
+		wait 1 tick
+		show_room_list(player)
+
+#-------create settings------
+function room_settings(p: player):
+	open chest with 5 row named "&9&lRoom Settings" to {_p}
+	if {playerdata.%{_p}%::room::room} is not set:
+		set {_round} to 3
+		set {_players} to 999
+		set {_private} to false
+	else:
+		set {_round} to {room::%{playerdata.%{_p}%::room::room}%::round}
+		set {_players} to {room::%{playerdata.%{_p}%::room::room}%::players}
+		set {_private} to {room::%{playerdata.%{_p}%::room::room}%::private}
+
+	set slot 10 of {_p}'s current inventory to sunflower named "&6ラウンド数: %{_round}%"
+	if {_players} is 999:
+		set slot 19 of {_p}'s current inventory to skull of {_p} named "&6人数制限: なし"
+	else:
+		set slot 19 of {_p}'s current inventory to skull of {_p} named "&6人数制限: %{_players}%"
+	if {_private} is false:
+		set slot 28 of {_p}'s current inventory to oak fence named "&6プライベート: OFF"
+	else:
+		set slot 28 of {_p}'s current inventory to oak fence named "&6プライベート: ON"
+
+	set slot 12 of {_p}'s current inventory to green wool named "&21"
+	set slot 13 of {_p}'s current inventory to cyan wool named "&32"
+	set slot 14 of {_p}'s current inventory to orange wool named "&63"
+	set slot 15 of {_p}'s current inventory to pink wool named "&d4"
+	set slot 16 of {_p}'s current inventory to purple wool named "&55"
+
+	set slot 21 of {_p}'s current inventory to green concrete named "&22"
+	set slot 22 of {_p}'s current inventory to cyan concrete named "&35"
+	set slot 23 of {_p}'s current inventory to orange concrete named "&610"
+	set slot 24 of {_p}'s current inventory to pink concrete named "&d15"
+	set slot 25 of {_p}'s current inventory to purple concrete named "&5なし"
+
+	set slot 30 of {_p}'s current inventory to iron door named "&aON"
+	set slot 31 of {_p}'s current inventory to oak door named "&cOFF"
+
+	#------inv design-----
+	loop 45 times:
+		if slot loop-number - 1 of {_p}'s current inventory is not air:
+			continue
+		if loop-number - 1 is 31 or 32 or 33 or 34:
+			continue
+		set slot loop-number - 1 of {_p}'s current inventory to lime stained glass pane named "&r"
+	#------nbt----------
+	#0 -> round, 1 -> max players, 2 -> private
+
+	#set slot 0 of {_p}'s current inventory to lime stained glass pane named "&r" with nbt "{round:3}"
+	#set slot 1 of {_p}'s current inventory to lime stained glass pane named "&r" with nbt "{players:999}"
+	#set slot 2 of {_p}'s current inventory to lime stained glass pane named "&r" with nbt "{private:off}"
+
+	#-----Decide--------
+	if {playerdata.%{_p}%::room::room} is not set:
+		set slot 44 of {_p}'s current inventory to chest named "&a&l部屋を作成する"
+	else:
+		set slot 44 of {_p}'s current inventory to crafting table named "&a&l設定を更新する"
+
+on inventory click:
+	name of player's current inventory contain "Room Settings"
+	name of clicked item is set
+	clicked item is not air
+	cancel event
+
+	if clicked item is wool:
+		set {_value} to uncolored name of clicked item
+
+		set slot 12 of player's current inventory to green wool named "&21"
+		set slot 13 of player's current inventory to cyan wool named "&32"
+		set slot 14 of player's current inventory to orange wool named "&63"
+		set slot 15 of player's current inventory to pink wool named "&d4"
+		set slot 16 of player's current inventory to purple wool named "&55"
+
+		set slot 10 of player's current inventory to glowing sunflower named "&6ラウンド数: %{_value}%"
+		set slot clicked slot of player's current inventory to glowing clicked item
+		#set slot 0 of player's current inventory to lime stained glass pane named "&r" with nbt "{round:%{_value}%}"
+
+	if clicked slot is 21 or 22 or 23 or 24 or 25:
+		set {_value} to uncolored name of clicked item
+
+		set slot 21 of player's current inventory to green concrete named "&22"
+		set slot 22 of player's current inventory to cyan concrete named "&35"
+		set slot 23 of player's current inventory to orange concrete named "&610"
+		set slot 24 of player's current inventory to pink concrete named "&d15"
+		set slot 25 of player's current inventory to purple concrete named "&5なし"
+
+		set slot 19 of player's current inventory to glowing skull of player named "&6人数制限: %{_value}%"
+		set slot clicked slot of player's current inventory to glowing clicked item
+		#if name of clicked item contain "なし":
+			#set slot 1 of player's current inventory to lime stained glass pane named "&r" with nbt "{players:999}"
+		#else:
+			#set slot 1 of player's current inventory to lime stained glass pane named "&r" with nbt "{players:%{_value}%}"
+	
+	if clicked item is door:
+		set {_value} to uncolored name of clicked item
+
+		set slot 30 of player's current inventory to iron door named "&aON"
+		set slot 31 of player's current inventory to oak door named "&cOFF"
+
+		set slot 28 of player's current inventory to glowing oak fence named "&6プライベート: %{_value}%"
+		set slot clicked slot of player's current inventory to glowing clicked item
+		#set slot 2 of player's current inventory to lime stained glass pane named "&r" with nbt "{players:%{_value} in lower case%}"
+
+	if name of clicked item contain "部屋を作成する" or "設定を更新する":
+		set {_split::*} to uncolored name of slot 10 of player's current inventory split at ": "
+		set {_round} to {_split::2} parsed as number
+
+		set {_split::*} to uncolored name of slot 19 of player's current inventory split at ": "
+		if {_split::2} contain "なし":
+			set {_players} to 999
+		else:
+			set {_players} to {_split::2} parsed as number
+		
+		set {_split::*} to uncolored name of slot 28 of player's current inventory split at ": "
+		if {_split::2} contain "OFF":
+			set {_private} to false
+		else:
+			set {_private} to true
+		
+		if name of clicked item contain "部屋を作成する":
+			close player's inventory
+			room_create({_round}, {_players}, {_private}, player)
+
+		if name of clicked item contain "設定を更新する":
+			set {room::%{playerdata.%player%::room::room}%::round} to {_round}
+			set {room::%{playerdata.%player%::room::room}%::players} to {_players}
+			set {room::%{playerdata.%player%::room::room}%::private} to {_private}
+			close player's inventory
+			send "&a部屋の設定を更新しました！" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+			loop all players in world "%{playerdata.%player%::room::room}%_room" parsed as world:
+				show_room_scoreborad(loop-player, {playerdata.%player%::room::room})
+
+function room_create(round: number = 3, players: number = 999, private: boolean = false, p: player):
+	if {playerdata.%{_p}%::room_exist} is not set:
+		command "/mv clone Baseworld %{_p}%_room"
+		set {playerdata.%{_p}%::room_exist} to true
+	command "/mv tp %{_p}% %{_p}%_room"
+	set {room::%{_p}%::owner} to {_p}
+	set {room::%{_p}%::room} to {_p}
+	set {room::%{_p}%::round} to {_round}
+	set {room::%{_p}%::players} to {_players}
+	set {room::%{_p}%::private} to {_private}
+	set {room::%{_p}%::opened} to true
+	set {room::%{_p}%::status} to "Waiting"
+	set {playerdata.%{_p}%::room::room} to {_p}
+
+	add {_p} to {roomlist::*}
+
+	wait 1 tick
+
+	set gamemode of {_p} to creative
+	show_room_scoreborad({_p}, {_p})
+	clear {_p}'s inventory
+	teleport {_p} to location at (0, 4, 0) in world "%{_p}%_room" parsed as world
+	room_item({_p})
+
+#------room list-------
+function show_room_list(p: player):
+	open chest with 6 row named "&3&lRoom list" to {_p}
+	if {roomlist::*} is not set:
+		send "&c現在開いている部屋はありません" to {_p}
+		close {_p}'s inventory
+		stop
+	set {_slot} to 0
+	loop {roomlist::*}:
+		if {room::%loop-value%::opened} is true:
+			{room::%loop-value%::private} is not true
+			#size(all players in world "%loop-value%_room") of 
+			set {_wait_room} to size(all players in world "%loop-value%_room" parsed as world)
+			set {_playing_room} to size(all players in world "%loop-value%_room_%{room::%loop-value%::map}%" parsed as world)
+			set {_size} to {_wait_room} + {_playing_room}
+			if {_size} <= 0:
+				set slot {_slot} of {_p}'s current inventory to skull of loop-value named "&3%loop-value%'s Room" with lore "&6Status: &5%{room::%loop-value%::status}%"
+			else:
+				set slot {_slot} of {_p}'s current inventory to {_size} of skull of loop-value named "&3%loop-value%'s Room" with lore "&6Status: &5%{room::%loop-value%::status}%"
+			add 1 to {_slot}
+
+on inventory click:
+	if name of player's current inventory contain "Room list":
+		cancel event
+		clicked item is not air
+		name of clicked item is set
+		set {_room_name::*} to uncolored name of clicked item split at "'s Room"
+		room_join(player, {_room_name::1} parsed as offline player)
+		
+#------room controll------
+function room_join(p: player, room: offline player):
+	command "/mv tp %{_p}% %{_room}%_room"
+	set {playerdata.%{_p}%::room::room} to {_room}
+
+	wait 1 tick
+
+	if {_room} is {_p}:
+		set gamemode of {_p} to creative
+	else if {room::%{_room}%::permissions_player::*} contain {_p}:
+		set gamemode of {_p} to creative
+	else:
+		set gamemode of {_p} to adventure
+
+	clear {_p}'s inventory
+	teleport {_p} to location at (0, 4, 0) in world "%{_room}%_room" parsed as world
+	send "&e%{_p}% &9Has Joined Room" to all players in world "%{_room}%_room" parsed as world
+	if {room::%{_room}%::status} is "Waiting":
+		#Waitingのみ全員更新
+		loop all players in world "%{_room}%_room" parsed as world:
+			show_room_scoreborad(loop-player, {_room})
+	if {room::%{_room}%::status} is "Playing":
+		show_points({_p}, {_room})
+	room_item({_p})
+
+#----close------
+function room_close(p: offline player):
+	loop all players in world "%{_p}%_room" parsed as world:
+		send "&c部屋を閉じました" to loop-player
+		execute loop-player command "/back"
+
+	delete {room_timeup_detection::%{_p}%}
+	delete {room_timeup_detection_bossbar::%{_p}%}
+	remove {_p} from {roomlist::*}
+
+	set {room::%{_p}%::opened} to false
+
+
+	command "/mv unload %{_p}%_room"
+	stop
+
+#-----open------
+function room_open(p: player):
+	command "/mv load %{_p}%_room"
+	set {room::%{_p}%::opened} to true
+	set {room::%{_p}%::owner} to {_p}
+	set {room::%{_p}%::room} to {_p}
+
+	add {_p} to {roomlist::*}
+
+	#SYSTEM
+	delete {room::%{_p}%::round_now}
+	delete {room::%{_p}%::maps::*}
+	delete {room::%{_p}%::maps::players::*}
+	delete {room::%{_p}%::forcemap}
+	delete {room::%{_p}%::game::playing_players::*}
+	delete {room::%{_p}%::game::goal_players::*}
+	delete {room::%{_p}%::game::giveup::*}
+	delete {room::%{_p}%::game::time::*}
+	delete {room::%{_p}%::game::start}
+	delete {room_timeup_detection::%{_p}%}
+	delete {room_timeup_detection_bossbar::%{_p}%}
+	
+	#MAP
+	delete {room::%{_p}%::game::spawn}
+	delete {room::%{_p}%::game::startpoint}
+	delete {room::%{_p}%::game::endpoint}
+	loop {room::%{_p}%::game::effect_location::*}:
+		delete {effect.%loop-value%}
+		delete {effect_time.%loop-value%}
+		delete {effect_lv.%loop-value%}
+	delete {room::%{_p}%::game::effect_location::*}
+
+	set {room::%{_p}%::status} to "Waiting"
+	set {room::%{_p}%::game} to false
+	room_join({_p}, {_p})
+
+#-----delete-------
+function room_delete(p: player):
+	wait 1 tick #バグ防止
+	open chest with 1 row named "&c&lRoom Delete" to {_p}
+	set slot 2 of {_p}'s current inventory to green wool named "&a部屋を削除する"
+	set slot 6 of {_p}'s current inventory to red wool named "&cキャンセル"
+
+on inventory click:
+	name of player's current inventory contain "Room Delete"
+	name of clicked item is set
+	cancel event
+
+	if name of clicked item contain "部屋を削除する":
+		clicked item is green wool
+		command "/mv load %player%_room"
+		command "/mv delete %player%_room"
+		command "/mvconfirm"
+		delete {room::%{_p}%::opened}
+		delete {playerdata.%player%::room_exist}
+		delete {playerdata.%player%::room::room}
+		send "&a部屋を削除しました"
+		close player's inventory
+
+	if name of clicked item contain "キャンセル":
+		send "&cキャンセルしました"
+		close player's inventory
+
+#-----Room settings------
+function room_settings_inroom(p: player):
+	open chest with 1 row named "&6&lRoom Settings InRoom" to {_p}
+	set slot 0 of {_p}'s current inventory to ender chest named "&a部屋の設定"
+	set slot 1 of {_p}'s current inventory to diamond named "&e管理者の設定"
+	set slot 2 of {_p}'s current inventory to emerald named "&9ルームオーナーの設定"
+	if {room::%{playerdata.%{_p}%::room::room}%::forcemap} is not set:
+		set slot 3 of {_p}'s current inventory to map named "&5マップ固定: &cOFF"
+	else:
+		set slot 3 of {_p}'s current inventory to map named "&5マップ固定: &aON"
+	if {room::%{playerdata.%{_p}%::room::room}%::timeup_settings} is not set:
+		set slot 4 of {_p}'s current inventory to clock named "&3タイムアップ: &aON"
+	else:
+		set slot 4 of {_p}'s current inventory to clock named "&3タイムアップ: &cOFF"
+	set slot 5 of {_p}'s current inventory to name tag named "&d友達を招待する"
+	set slot 8 of {_p}'s current inventory to redstone block named "&4ラウンドリセット"
+
+on inventory click:
+	name of player's current inventory contain "Room Settings InRoom"
+	name of clicked item is set
+	cancel event
+
+	if name of clicked item contain "部屋の設定":
+		room_settings(player)
+
+	if name of clicked item contain "管理者の設定":
+		open chest with 1 row named "&eルーム管理者の設定" to player
+		set slot 2 of player's current inventory to light green wool named "&a管理者の追加"
+		set slot 4 of player's current inventory to name tag named "&6管理者の確認"
+		set slot 6 of player's current inventory to red wool named "&a管理者の削除"
+
+	if name of clicked item contain "ルームオーナーの設定":
+		wait 1 tick
+		show_player_heads(player, all players in world "%{playerdata.%player%::room::room}%_room" parsed as world, "&9ルームオーナーの設定")
+
+	if name of clicked item contain "マップ固定":
+		set {_split::*} to uncolored name of clicked item split at "マップ固定: "
+		if {_split::2} is "OFF":
+			set {room::%{playerdata.%player%::room::room}%::forcemap} to true
+			send "&6MAP固定が&cON&6になりました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+			delete {room::%{playerdata.%player%::room::room}%::maps::*}
+			delete {room::%{playerdata.%player%::room::room}%::maps::players::*}
+			set slot 3 of player's current inventory to map named "&5マップ固定: &aON"
+		if {_split::2} is "ON":
+			delete {room::%{playerdata.%player%::room::room}%::forcemap}
+			send "&6MAP固定が&aOFF&6になりました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+			set slot 3 of player's current inventory to map named "&5マップ固定: &cOFF"
+
+	if name of clicked item contain "タイムアップ":
+		wait 1 tick
+		open chest with 1 row named "&3タイムアップの設定" to player
+		set {_split::*} to uncolored name of clicked item split at "タイムアップ: "
+		if {_split::2} is "OFF":
+			set slot 0 of player's current inventory to clock named "&3タイムアップ: &aON" with lore "&eTime Left = Map average time + (settings time)"
+		if {_split::2} is "ON":
+			set slot 0 of player's current inventory to clock named "&3タイムアップ: &cOFF" with lore "&eTime Left = Map average time + (settings time)"
+		#0 30 60 90 120 180
+		set slot 2 of player's current inventory to leather named "&50"
+		set slot 3 of player's current inventory to leather named "&c30"
+		set slot 4 of player's current inventory to leather named "&660"
+		set slot 5 of player's current inventory to leather named "&b90"
+		set slot 6 of player's current inventory to leather named "&a120"
+		set slot 7 of player's current inventory to leather named "&d180"
+	
+	if name of clicked item contain "友達を招待する":
+		wait 1 tick
+		show_player_heads(player, all players, "&d友達を招待する")
+	
+	if name of clicked item contain "ラウンドリセット":
+		open chest with 1 row named "&4ラウンドをリセットする" to player
+		set slot 2 of player's current inventory to light green wool named "&aリセットする" with lore "&3ラウンド、ポイントをリセットします"
+		set slot 6 of player's current inventory to red wool named "&cキャンセル"
+
+on inventory click:
+	name of player's current inventory contain "ルーム管理者の設定"
+	name of clicked item is set
+	cancel event
+	if name of clicked item contain "管理者の追加":
+		show_player_heads(player, all players in world "%{playerdata.%player%::room::room}%_room" parsed as world, "&aルーム管理者の追加")
+	if name of clicked item contain "管理者の削除":
+		show_player_heads(player, all players in world "%{playerdata.%player%::room::room}%_room" parsed as world, "&cルーム管理者の削除")
+	if name of clicked item contain "管理者の確認":
+		open chest with 1 row named "&6ルーム管理者の確認" to player
+		set {_slots} to 0
+		loop all players in world "%{playerdata.%player%::room::room}%_room" parsed as world:
+			{room::%{playerdata.%player%::room::room}%::permissions_player::*} contain loop-player
+			set slot {_slots} of player's current inventory to skull of loop-player named "&6%loop-player%"
+			add 1 to {_slots}
+
+on inventory click:
+	name of player's current inventory contain "ルーム管理者の追加"
+	name of clicked item is set
+	cancel event
+	if {room::%{playerdata.%player%::room::room}%::permissions_player::*} contain uncolored name of clicked item parsed as player:
+		send "&c既に追加されています"
+		stop
+	set {_players::*} to all players in world "%player's world%" parsed as world
+	if {_players::*} do not contain uncolored name of clicked item parsed as player:
+		send "&cプレイヤーが見つかりません"
+		stop
+	add uncolored name of clicked item parsed as player to {room::%{playerdata.%player%::room::room}%::permissions_player::*}
+	send "&a%uncolored name of clicked item%を管理者に追加しました"
+	set gamemode of uncolored name of clicked item parsed as player to creative
+	stop
+
+on inventory click:
+	name of player's current inventory contain "ルーム管理者の削除"
+	name of clicked item is set
+	cancel event
+	if {room::%{playerdata.%player%::room::room}%::permissions_player::*} do not contain uncolored name of clicked item parsed as player:
+		send "&c%player%は管理者に追加されてません"
+		stop
+	remove uncolored name of clicked item parsed as player from {room::%{playerdata.%player%::room::room}%::permissions_player::*}
+	send "&c%uncolored name of clicked item%を管理者から削除しました"
+	set gamemode of uncolored name of clicked item parsed as player to adventure
+	stop
+
+on inventory click:
+	name of player's current inventory contain "ルームオーナーの設定"
+	name of clicked item is set
+	cancel event
+	set {room::%{playerdata.%player%::room::room}%::owner} to uncolored name of clicked item parsed as player
+	send "&a%{room::%{playerdata.%player%::room::room}%::owner}%が新たにルームオーナーになりました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+	room_item({room::%{playerdata.%player%::room::room}%::owner})
+	room_item(player)
+	close player's inventory
+	stop
+
+on inventory click:
+	name of player's current inventory contain "友達を招待する"
+	name of clicked item is set
+	cancel event
+	set {_invite_player} to uncolored name of clicked item parsed as player
+	{_invite_player} is not event-player
+	send "<command:/roomjoin %{playerdata.%player%::room::room}%><tooltip:&bクリックで参加>&e%player%&dからマルチプレイの招待が来ています！ &b(参加する)" to {_invite_player}
+	set {playerdata.%{_invite_player}%::room::invite} to {playerdata.%player%::room::room}
+	send "&6%{_invite_player}%に招待を送りました"
+	wait 30 seconds
+	if {playerdata.%{_invite_player}%::room::invite} is set:
+		send "&cマルチプレイの招待が無効になりました"
+		delete {playerdata.%{_invite_player}%::room::invite}
+		stop
+	delete {playerdata.%{_invite_player}%::room::invite}
+	stop
+
+on inventory click:
+	name of player's current inventory contain "タイムアップの設定"
+	name of clicked item is set
+	cancel event
+	if name of clicked item contain "タイムアップ":
+		#not set -> on, false -> off
+		set {_split::*} to uncolored name of clicked item split at "タイムアップ: "
+		if {_split::2} is "OFF":
+			send "&6タイムアップの設定が&aON&6になりました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+			delete {room::%{playerdata.%player%::room::room}%::timeup_settings}
+			set slot 0 of player's current inventory to clock named "&3タイムアップ: &aON" with lore "&eTime Left = Map average time + (settings time)"
+		if {_split::2} is "ON":
+			set {room::%{playerdata.%player%::room::room}%::timeup_settings} to false
+			send "&6タイムアップの設定が&cOFF&6になりました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+			set slot 0 of player's current inventory to clock named "&3タイムアップ: &cOFF" with lore "&eTime Left = Map average time + (settings time)"
+	else:
+		set {_time} to uncolored name of clicked item parsed as number
+		set {room::%{playerdata.%player%::room::room}%::timeup_settings_time} to {_time}
+		send "&6タイムアップの時間が&a%{_time}%&6になりました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+
+command /roomjoin [<offline player>]:
+	trigger:
+		if {room::%arg 1%::opened} is not true:
+			send "&c%arg 1%の部屋は現在開いてません"
+			stop
+		if arg 1 is not {playerdata.%player%::room::invite}:
+			send "&c招待が無効です"
+			stop
+		execute player command "/back"
+		wait 5 tick
+		room_join(player, arg 1)
+
+on inventory click:
+	name of player's current inventory contain "ラウンドをリセットする"
+	name of clicked item is set
+	cancel event
+	if name of clicked item contain "リセットする":
+		set {room::%{playerdata.%player%::room::room}%::round_now} to 0
+		delete {room::%{playerdata.%player%::room::room}%::points::*}
+		send "&6ルームオーナーがラウンドをリセットしました" to all players in world "%{playerdata.%player%::room::room}%_room" parsed as world
+		loop all players in world "%{playerdata.%player%::room::room}%_room" parsed as world:
+			show_room_scoreborad(loop-player, {playerdata.%player%::room::room})
+		close player's inventory
+	if name of clicked item contain "キャンセル":
+		close player's inventory
+
+function show_player_heads(p: player, players: players, inv_name: text):
+	open chest with 3 row named {_inv_name} to {_p}
+	set {_slots} to 0
+	loop {_players::*}:
+		set slot {_slots} of {_p}'s current inventory to skull of loop-value named "&6%loop-value%"
+		add 1 to {_slots}
+
+#------item----------
+on rightclick holding ender eye:
+	name of player's held item contain "初期地点に戻る"
+	teleport player to location at (0, 4, 0)
+
+on rightclick holding clock:
+	name of player's held item contain "Room settings"
+	{room::%{playerdata.%player%::room::room}%::owner} is player
+	room_settings_inroom(player)
+
+on rightclick holding map:
+	cancel event
+	name of player's held item contain "MAPを選択する"
+	show_server_list(player)
+
+on rightclick holding nether star:
+	name of player's held item contain "ゲームスタート"
+	if {room::%{playerdata.%player%::room::room}%::game} is true:
+		stop
+	round_start({playerdata.%player%::room::room})
+
+#-------Game-------
+on rightclick holding ender eye:
+	name of player's held item contain "チェックポイントへ戻る &a[Room]"
+	if {playerdata.%player%::checkpoint} is set:
+		teleport player to {playerdata.%player%::checkpoint}
+		stop
+	if {room::%{playerdata.%player%::room::room}%::game::spawn} is set:
+		teleport player to {room::%{playerdata.%player%::room::room}%::game::spawn}
+		stop
+
+on rightclick holding redstone block:
+	name of player's held item contain "強制終了"
+	if {room::%{playerdata.%player%::room::room}%::game::start} is true:
+		if {room::%{playerdata.%player%::room::room}%::game::game_end} is not true:
+			game_end({playerdata.%player%::room::room}, {room::%{playerdata.%player%::room::room}%::game::playing_players::*})
+
+on rightclick holding banner:
+	name of player's held item contain "ギブアップ"
+	if {room::%{playerdata.%player%::room::room}%::game::start} is true:
+		if {room::%{playerdata.%player%::room::room}%::game::giveup::%player%} is not set:
+			if {room::%{playerdata.%player%::room::room}%::game::goal_players::%player%} is not set:
+				if {room::%{playerdata.%player%::room::room}%::game::game_end} is not true:
+					send "&c%player% has giveup" to all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world
+					map_goal(player, {playerdata.%player%::room::room}, true)
+					set {_players} to size({room::%{playerdata.%player%::room::room}%::game::playing_players::*})
+					set {_goals} to size({room::%{playerdata.%player%::room::room}%::game::goal_players::*})
+					set {_giveup} to size({room::%{playerdata.%player%::room::room}%::game::giveup::*})
+					if {_goals} + {_giveup} - {_players} <= 0:
+						send "&6&l順位が確定したのでゲームを終了します" to all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world
+						sound("entity.player.levelup", all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world, 0)
+						game_end({playerdata.%player%::room::room}, {room::%{playerdata.%player%::room::room}%::game::playing_players::*}, "normal")
+						stop
+
+function room_item(p: offline player):
+	clear {_p}'s inventory
+	set slot 0 of {_p}'s inventory to eye of ender named "&6初期地点に戻る"
+	set slot 1 of {_p}'s inventory to clay brick item named "&3ロビーに戻る"
+	set slot 2 of {_p}'s inventory to map named "&9MAPを選択する"
+	if {room::%{playerdata.%{_p}%::room::room}%::owner} is {_p}:
+		set slot 8 of {_p}'s inventory to clock named "&3Room settings"
+		set slot 4 of {_p}'s inventory to nether star named "&bゲームスタート"
+
+command /roomitem:
+	trigger:
+		{playerdata.%player%::room::room} is set
+		{room::%{playerdata.%player%::room::room}%::owner} is player
+
+		room_item(player)
+
+function room_game_item(p: offline player):
+	clear {_p}'s inventory
+	set slot 0 of {_p}'s inventory to eye of ender named "&6チェックポイントへ戻る &a[Room]"
+	set slot 1 of {_p}'s inventory to clay brick item named "&3ロビーに戻る"
+	set slot 2 of {_p}'s inventory to white banner item named "&cギブアップ"
+	if {room::%{playerdata.%{_p}%::room::room}%::owner} is {_p}:
+		set slot 8 of {_p}'s inventory to redstone block named "&4強制終了"
+
+on inventory click:
+	if name of player's current inventory contain "Server list":
+		{playerdata.%player%::iine_select} is not true
+		{playerdata.%player%::room::room} is set
+		cancel event
+		name of clicked item is set
+		clicked item isn't green glass pane
+		clicked slot isn't 9 or 18 or 27 or 36 or 46 or 53 or 1
+		name of clicked item don't contain "サーバーを探す" #line 104 details
+		clicked inventory is not player's inventory
+		if uncolored name of clicked item contain "✔":
+			set {_ranked_subtext} to first length of uncolored name of clicked item - 2 characters of uncolored name of clicked item #サーバー名を正確に取得するため(-2はRankedのマークと空白)
+			set {_servername} to {server::%{_ranked_subtext}%::id} #Get server id
+			set {_display_name} to {_ranked_subtext}
+		else:
+			set {_servername} to {server::%uncolored name of clicked item%::id} #Get server id
+			set {_display_name} to uncolored name of clicked item
+		
+		if {room::%{playerdata.%player%::room::room}%::maps::players::*} contain player:
+			send "&c既にMAPを選択しました"
+			close player's inventory
+			stop
+		if {room::%{playerdata.%player%::room::room}%::forcemap} is not set:
+			add {_servername} to {room::%{playerdata.%player%::room::room}%::maps::*}
+			add player to {room::%{playerdata.%player%::room::room}%::maps::players::*}
+			send "&e%player%&6さんが&a%{_display_name}%&6をMAP投票しました"
+			close player's inventory
+			stop
+		if {room::%{playerdata.%player%::room::room}%::forcemap} is true:
+			if {room::%{playerdata.%player%::room::room}%::owner} is not player:
+				send "&cマップ固定がオンになっているので選択できません"
+				close player's inventory
+				stop
+			else:
+				add {_servername} to {room::%{playerdata.%player%::room::room}%::maps::*}
+				add player to {room::%{playerdata.%player%::room::room}%::maps::players::*}
+				send "&e%player%&6さんが&a%{_display_name}%&6をMAP投票しました"
+				close player's inventory
+				stop
+
+function round_start(p: offline player):
+	#if size(all players in world "%{_p}%_room" parsed as world) <= 1:
+		#send "&cプレイヤーが二人以上必要です" to {_p}
+		#stop
+	if {server::id::*} is not set:
+		send "&cマップを作成し、公開してください" to {_p}
+		stop
+	set {room::%{_p}%::game} to true
+	set {room::%{_p}%::status} to "Playing"
+	add 1 to {room::%{_p}%::round_now}
+	if {room::%{_p}%::maps::*} is not set:
+		while {_map} is not set:
+			set {_random_map} to random string of {server::id::*}
+			if {server::%{_random_map}%::relese} is true:
+				if {server::%{_random_map}%::ranked} is true:
+					set {_map} to {_random_map}
+	else:
+		set {_map} to random string of {room::%{_p}%::maps::*}
+	set {room::%{_p}%::map} to {_map}
+	set {room::%{_p}%::map::name} to {server::%{_map}%::servername}
+	set {room::%{_p}%::map::author} to {server::%{_map}%::owner}
+	set_server_location({_map})
+	command "/mv clone %{_map}% %{_p}%_room_%{_map}%"
+	#send "&a&lゲームを開始します" to all players in world "%{_p}%_room" parsed as world
+	#wait 3 seconds
+	map_clone_location({_map}, {_p}, "%{_p}%_room_%{_map}%")
+	map_settings("%{_p}%")
+	loop all players in world "%{_p}%_room" parsed as world:
+		add loop-player to {room::%{_p}%::game::playing_players::*}
+		command "/mv tp %loop-player% %{_p}%_room_%{_map}%"
+	set {room::%{_p}%::game::goal_number} to 0
+	set {room::%{_p}%::game::start_waiting} to true
+	wait 1 tick
+	loop all players in world "%{_p}%_room_%{_map}%" parsed as world:
+		set gamemode of loop-player to adventure
+		teleport loop-player to location at location 2 upwards {room::%{_p}%::game::spawn}
+		set loop-player's flight mode to true
+		command "/effect %loop-player% clear"
+		sound("item.elytra.flying", loop-player, 0.9)
+		show_goal_score(loop-player, {playerdata.%loop-player%::room::room})
+		room_game_item(loop-player)
+
+	#Start
+	send all players in world "%{_p}%_room_%{_map}%" parsed as world title "&6&l%{room::%{_p}%::map::name}%" and subtitle "&9Auhor By: &e&l%{room::%{_p}%::map::author}%" for 7 seconds with 0.5 seconds fade in and 0.5 seconds fade out
+	if {room::%{_p}%::round} is {room::%{_p}%::round_now}:
+		set action bar of all players in world "%{_p}%_room_%{_map}%" parsed as world to "&c&lFinal Round"
+	else:
+		set action bar of all players in world "%{_p}%_room_%{_map}%" parsed as world to "&6&lRound &5&l%{room::%{_p}%::round_now}%"
+	wait 10 seconds
+	loop all players in world "%{_p}%_room_%{_map}%" parsed as world:
+		teleport loop-player to {room::%{_p}%::game::spawn}
+		set loop-player's flight mode to false
+		apply potion of slowness of tier 127 to loop-player for 10 minutes
+		apply potion of jump boost of tier 129 to loop-player for 10 minutes
+		apply invisibility 1 without particles to loop-player for 5 minutes
+		apply glowing 1 without particles to loop-player for 5 minutes
+	set {_p::*} to all players in world "%{_p}%_room_%{_map}%" parsed as world
+	start_count(5, {_p::*}, {room::%{_p}%::game::spawn})
+	wait 5 seconds
+	remove jump boost from all players in world "%{_p}%_room_%{_map}%" parsed as world
+	remove slowness from all players in world "%{_p}%_room_%{_map}%" parsed as world
+	set {room::%{_p}%::game::start} to true
+	set {room::%{_p}%::game::unixtime_timeup} to unix timestamp of now
+	if "%average({server::%{room::%{_p}%::map}%::ranking::*})%" is "NaN":
+		set {room::%{_p}%::game::timeup} to "none"
+	else if {room::%{_p}%::timeup_settings} is false:
+		set {room::%{_p}%::game::timeup} to "none"
+	else:
+		if {room::%{_p}%::timeup_settings_time} is not set:
+			set {room::%{_p}%::game::timeup} to average({server::%{room::%{_p}%::map}%::ranking::*}) / 0.20 + 90
+		else:
+			set {room::%{_p}%::game::timeup} to average({server::%{room::%{_p}%::map}%::ranking::*}) / 0.20 + {room::%{_p}%::timeup_settings_time}
+		timeup_detection({_p})
+	delete {room::%{_p}%::game::start_waiting}
+	set {room::%{_p}%::game::unixtime} to unix timestamp of now
+	sound("block.note.pling", all players in world "%{_p}%_room_%{_map}%" parsed as world)
+
+function start_count(countdown: number, p: players, loc: location):
+	set {_count} to {_countdown}
+	loop {_countdown} times:
+		send {_p::*} title "&6%{_count}%" for 1 seconds with 0.5 seconds fade in and 0.5 seconds fade out
+		sound("ui.button.click", {_p::*}, 0)
+		teleport {_p::*} to {_loc}
+		wait 1 seconds
+		remove 1 from {_count}
+	teleport {_p::*} to {_loc}
+	send {_p::*} title "&a&lSTART!!" for 0.5 seconds with 0.5 seconds fade in and 0.5 seconds fade out
+
+function round_end(p: offline player, world: text, game_end: boolean = false):
+	set {room::%{_p}%::game} to false
+	loop all players in world "%{_p}%_room_%{_world}%" parsed as world:
+		command "/mv tp %loop-player% %{_p}%_room"
+	wait 1 tick
+	reveal all players from all players
+	loop all players in world "%{_p}%_room" parsed as world:
+		if {room::%{_p}%::owner} is loop-player:
+			set gamemode of loop-player to creative
+		else if {room::%{_p}%::permissions_player::*} contain loop-player:
+			set gamemode of loop-player to creative
+		else:
+			set gamemode of loop-player to adventure
+		teleport loop-player to location at (0, 4, 0) in world "%{_p}%_room" parsed as world
+		command "/effect %loop-player% clear"
+		room_item(loop-player)
+		show_points(loop-player, {_p})
+	delete {room::%{_p}%::game::spawn}
+	delete {room::%{_p}%::game::startpoint}
+	delete {room::%{_p}%::game::endpoint}
+	loop {room::%{_p}%::game::effect_location::*}:
+		delete {effect.%loop-value%}
+		delete {effect_time.%loop-value%}
+		delete {effect_lv.%loop-value%}
+	delete {room::%{_p}%::game::effect_location::*}
+
+	delete {room::%{_p}%::maps::*}
+	delete {room::%{_p}%::maps::players::*}
+	delete {room::%{_p}%::game::playing_players::*}
+	delete {room::%{_p}%::game::goal_players::*}
+	delete {room::%{_p}%::game::giveup::*}
+	delete {room::%{_p}%::game::time::*}
+	delete {room::%{_p}%::game::start}
+	delete {room::%{_p}%::game::game_end}
+
+	delete {room_timeup_detection::%{_p}%}
+	delete {room_timeup_detection_bossbar::%{_p}%}
+	command "/mv delete %{_p}%_room_%{_world}%"
+	command "/mvconfirm"
+
+	if {_game_end} is true:
+		set {room::%{_p}%::status} to "Waiting"
+		#ゲーム結果
+		game_result({_p})
+		set {room::%{_p}%::round_now} to 0
+		delete {room::%{_p}%::points::*}
+		loop all players in world "%{_p}%_room" parsed as world:
+			show_room_scoreborad(loop-player, {_p})
+			sound("ui.toast.challenge_complete", loop-player, 1.2)
+	else:
+		set {room::%{_p}%::status} to "Next Round"
+
+#-------goal-------
+on walking on diamond block:
+	{room::%{playerdata.%player%::room::room}%::game::start} is true
+	{room::%{playerdata.%player%::room::room}%::game::game_end} is not true
+	{room::%{playerdata.%player%::room::room}%::game::goal_players::%player%} is not set
+	{room::%{playerdata.%player%::room::room}%::game::giveup::%player%} is not set
+	gamemode of player is adventure or creative
+	{room::%{playerdata.%player%::room::room}%::game::endpoint} is location of event-block
+	send "&a&l%player%がゴールしました！" to all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world
+	#set gamemode of player to spectator
+	add 1 to {room::%{playerdata.%player%::room::room}%::game::goal_number}
+	set {room::%{playerdata.%player%::room::room}%::game::goal_players::%player%} to {room::%{playerdata.%player%::room::room}%::game::goal_number}
+	set {room::%{playerdata.%player%::room::room}%::game::time::%player%} to unix timestamp of now - {room::%{playerdata.%player%::room::room}%::game::unixtime}
+	map_goal(player, {playerdata.%player%::room::room})
+	loop all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world:
+		show_goal_score(loop-player, {playerdata.%player%::room::room})
+	if {room::%{playerdata.%player%::room::room}%::game::goal_number} is 1:
+		#時間制限スタート
+		sound("entity.enderdragon.ambient", all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world, 1.1)
+		if {room::%{playerdata.%player%::room::room}%::timeup_settings} is not set:
+			if {room_timeup_detection::%{playerdata.%player%::room::room}%} is not set:
+				set {room::%{playerdata.%player%::room::room}%::game::unixtime_timeup} to unix timestamp of now
+				set {room::%{playerdata.%player%::room::room}%::game::timeup} to {room::%{playerdata.%player%::room::room}%::timeup_settings_time}
+				timeup_detection({playerdata.%player%::room::room})
+			else if {room_timeup_detection::%{playerdata.%player%::room::room}%} is set:
+				set {_players} to size({room::%{playerdata.%player%::room::room}%::game::playing_players::*})
+				set {_goals} to size({room::%{playerdata.%player%::room::room}%::game::goal_players::*})
+				if {_players} - {_goals} >= 1:
+					if (unix timestamp of now - {room::%{playerdata.%player%::room::room}%::game::unixtime_timeup}) - 90 < 0:
+						delete {room_timeup_detection::%{playerdata.%player%::room::room}%}
+						wait 2 seconds
+						set {room::%{playerdata.%player%::room::room}%::game::unixtime_timeup} to unix timestamp of now
+						set {room::%{playerdata.%player%::room::room}%::game::timeup} to 90
+						timeup_detection({playerdata.%player%::room::room})
+	else:
+		sound("entity.player.levelup", all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world, 0.7)
+	#ゴールした人数が一人以下だったら強制終了
+	set {_players} to size({room::%{playerdata.%player%::room::room}%::game::playing_players::*})
+	set {_goals} to size({room::%{playerdata.%player%::room::room}%::game::goal_players::*})
+	if {_players} - {_goals} <= 1:
+		send "&6&l順位が確定したのでゲームを終了します" to all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world
+		sound("entity.player.levelup", all players in world "%{playerdata.%player%::room::room}%_room_%{room::%{playerdata.%player%::room::room}%::map}%" parsed as world, 0)
+		game_end({playerdata.%player%::room::room}, {room::%{playerdata.%player%::room::room}%::game::playing_players::*}, "normal")
+		stop
+
+function map_goal(p: player, room: offline player, giveup: boolean = false):
+	if {_giveup} is true:
+		set {room::%{_room}%::game::giveup::%{_p}%} to true
+	loop {room::%{_room}%::game::playing_players::*}:
+		if {room::%{_room}%::game::goal_players::%loop-value%} is not set:
+			add loop-value to {_hide_players::*}
+		else if {room::%{_room}%::game::goal_players::%loop-value%} is set:
+			add loop-value to {_reveal_players::*}
+	hide {_p} from {_hide_players::*}
+	reveal {_reveal_players::*} from {_p}
+	set flying state of {_p} to true
+
+function timeup_detection(room: offline player):
+	set {room_timeup_detection::%{_room}%} to true
+	set {room_timeup_detection_bossbar::%{_room}%} to new bossbar
+	set color of bossbar {room_timeup_detection_bossbar::%{_room}%} to white
+	set style of bossbar {room_timeup_detection_bossbar::%{_room}%} to solid
+	set skellett progress of bossbar {room_timeup_detection_bossbar::%{_room}%} to 1 #max
+	set {_time} to round({room::%{_room}%::game::timeup})
+	set {_division} to round({room::%{_room}%::game::timeup})
+	loop all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world:
+		add loop-player to boss bar {room_timeup_detection_bossbar::%{_room}%}
+	while {room_timeup_detection::%{_room}%} is true:
+		if {room::%{_room}%::game::game_end} is true:
+			loop {room::%{_room}%::game::playing_players::*}:
+				remove loop-value from bossbar {room_timeup_detection_bossbar::%{_room}%}
+			delete {room_timeup_detection_bossbar::%{_room}%}
+			delete {room_timeup_detection::%{_room}%}
+			stop loop
+			stop
+		set skellett progress of bossbar {room_timeup_detection_bossbar::%{_room}%} to {_time} / {_division}
+		if {_time} >= 60:
+			if mod({_time}, 60) >= 10:
+				set string of bossbar {room_timeup_detection_bossbar::%{_room}%} to "&5Time left &6%floor({_time} / 60)%:%mod({_time}, 60)%"
+			else:
+				set string of bossbar {room_timeup_detection_bossbar::%{_room}%} to "&5Time left &6%floor({_time} / 60)%:0%mod({_time}, 60)%"
+		else if {_time} >= 10:
+			set string of bossbar {room_timeup_detection_bossbar::%{_room}%} to "&5Time left &60:%{_time}%"
+		else:
+			set string of bossbar {room_timeup_detection_bossbar::%{_room}%} to "&5Time left &60:0%{_time}%"
+		remove 1 from {_time}
+		send "%unix timestamp of now - {room::%{_room}%::game::unixtime_timeup}% LIMIT %{room::%{_room}%::game::timeup}%" to all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world
+		if {room::%{_room}%::game::timeup} < unix timestamp of now - {room::%{_room}%::game::unixtime_timeup}:
+			send "&cTIME UP!" to all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world
+			sound("entity.skeleton_horse.death", all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world)
+			loop all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world:
+				if {room::%{_room}%::game::goal_players::%loop-player%} is set:
+					continue
+				set {_auto_ranking::%loop-player%} to distance between location of loop-player and {room::%{_room}%::game::endpoint}
+			if {_auto_ranking::*} is set:
+				loop {_auto_ranking::*}:
+					set {_ranking_index::%loop-value%} to loop-index
+				loop size({_auto_ranking::*}) times:
+					set {_ranking_max} to min({_auto_ranking::*})
+					add 1 to {room::%{_room}%::game::goal_number}
+					set {room::%{_room}%::game::goal_players::%{_ranking_index::%{_ranking_max}%}%} to {room::%{_room}%::game::goal_number}
+					delete {_auto_ranking::%{_ranking_index::%{_ranking_max}%}%}
+
+			game_end({playerdata.%{_room}%::room::room}, all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world, "normal")
+			stop loop
+		wait 1 seconds
+	loop all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world:
+		remove loop-value from bossbar {room_timeup_detection_bossbar::%{_room}%}
+	delete {room_timeup_detection_bossbar::%{_room}%}
+	delete {room_timeup_detection::%{_room}%}
+
+function game_end(p: offline player, players: players, type: text = "force"):
+	if {_type} is "force":
+		#if Final Round
+		send "&cルームオーナーがゲームを強制終了しました。" to all players in world "%{_p}%_room_%{room::%{_p}%::map}%" parsed as world
+		if {room_timeup_detection_bossbar::%{_p}%} is set:
+			loop {room::%{_p}%::game::playing_players::*}:
+				remove loop-value from bossbar {room_timeup_detection_bossbar::%{_p}%}
+		if {room::%{_p}%::round} <= {room::%{_p}%::round_now}:
+			round_end({_p}, "%{room::%{_p}%::map}%", true)
+		else:
+			round_end({_p}, "%{room::%{_p}%::map}%")
+		stop
+	set {room::%{_p}%::game::game_end} to true
+	set {_goal_players} to size({room::%{_p}%::game::goal_players::*})
+	send "&6&l-------&5Round Result&6&l------" to all players in world "%{_p}%_room_%{room::%{_p}%::map}%" parsed as world
+	loop {room::%{_p}%::game::goal_players::*}:
+		#loop-index: player, loop-value: goal number
+		if {room::%{_p}%::points::%loop-index%} is not set:
+			set {_old_points} to 0
+		else:
+			set {_old_points} to {room::%{_p}%::points::%loop-index%}
+		send "&e%loop-index% &3%{_old_points}% &f+ &3%size({_players::*}) - loop-value + 1% &6=> &a&l%{_old_points} + size({_players::*}) - loop-value + 1%" to all players in world "%{_p}%_room_%{room::%{_p}%::map}%" parsed as world
+		add size({_players::*}) - loop-value + 1 to {room::%{_p}%::points::%loop-index%}
+		points_sound(loop-index parsed as player, size({_players::*}) - loop-value + 1)
+	loop all players in world "%{_p}%_room_%{room::%{_p}%::map}%" parsed as world:
+		if {room::%{_p}%::points::%loop-player%} is set:
+			continue
+		else:
+			set {room::%{_p}%::points::%loop-player%} to 0
+	wait 7 seconds
+	if {room::%{_p}%::round} <= {room::%{_p}%::round_now}:
+		round_end({_p}, "%{room::%{_p}%::map}%", true)
+	else:
+		round_end({_p}, "%{room::%{_p}%::map}%")
+	stop
+
+function game_result(p: offline player):
+	send "&3&l--------&5Game Result&3&l--------" to all players in world "%{_p}%_room" parsed as world
+	set {_high} to 0
+	loop {room::%{_p}%::points::*}:
+		set {_list::%loop-index%} to loop-value
+	loop size({_list::*}) times:
+		loop {_list::*}:
+			loop-value-2 > {_high}
+			set {_high} to loop-value-2
+			set {_highplayer} to loop-index
+		if loop-number is 1:
+			send "&e❶ &b%{_highplayer}%: &a&l%{_high}% &6Points" to all players in world "%{_p}%_room" parsed as world
+		else if loop-number is 2:
+			send "&f❷ &b%{_highplayer}%: &a&l%{_high}% &6Points" to all players in world "%{_p}%_room" parsed as world
+		else if loop-number is 3:
+			send "&6❸ &b%{_highplayer}%: &a&l%{_high}% &6Points" to all players in world "%{_p}%_room" parsed as world
+		else:
+			send "&b%{_highplayer}%: &a&l%{_high}% &6Points" to all players in world "%{_p}%_room" parsed as world
+		set {_high} to 0
+		delete {_list::%{_highplayer}%}
+
+	
+#------back------
+on command "back":
+	if {room::%{playerdata.%player%::room::room}%::game::start_waiting} or {room::%{playerdata.%player%::room::room}%::game::game_end} is true:
+		cancel event
+		stop
+	teleport player to {lobby}
+	room_quit_and_back(player)
+	delete {playerdata.%player%::room::room}
+	delete {playerdata.%player%::room::invite}
+
+on quit:
+	room_quit_and_back(player)
+
+#-------quit&back-------
+function room_quit_and_back(p: player):
+	{playerdata.%{_p}%::room::room} is set
+	set {_room} to {playerdata.%{_p}%::room::room}
+	if {room::%{_room}%::status} is "Waiting" or "Next Round":
+		wait 1 tick
+		if size(all players in world "%{_room}%_room" parsed as world) <= 0:
+			delete {playerdata.%{_p}%::room::room}
+			room_close({_room})
+			stop
+		if {_p} is {room::%{_room}%::owner}:
+			set {_random::*} to all players in world "%{_room}%_room" parsed as world
+			remove {_p} from {_random::*}
+			set {room::%{_room}%::owner} to random player of {_random::*}
+			send "&aサーバーオーナーが退室したので%{room::%{_room}%::owner}%が新たにオーナーになりました" to all players in world "%{_room}%_room" parsed as world
+			set gamemode of {room::%{_room}%::owner} to creative
+			room_item({room::%{_room}%::owner})
+		delete {playerdata.%{_p}%::room::room}
+	else if {room::%{_room}%::status} is "Playing":
+		if {room::%{_room}%::game::playing_players::*} contain {_p}:
+			if {room_timeup_detection_bossbar::%{_room}%} is set:
+				remove {_p} from bossbar {room_timeup_detection_bossbar::%{_room}%}
+		wait 1 tick
+		if size(all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world) <= 0:
+			delete {playerdata.%{_p}%::room::room}
+			room_close({_room})
+			stop
+		if {_p} is {room::%{_room}%::owner}:
+			set {_random::*} to all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world
+			remove {_p} from {_random::*}
+			set {room::%{_room}%::owner} to random player of {_random::*}
+			send "&aサーバーオーナーが退室したので%{room::%{_room}%::owner}%が新たにオーナーになりました" to all players in world "%{_room}%_room_%{room::%{_room}%::map}%" parsed as world
+			room_game_item({room::%{_room}%::owner})
+		remove {_p} from {room::%{_room}%::game::playing_players::*}
+		delete {playerdata.%{_p}%::room::room}
+
+
+#-------Room reset-------
+on skript start:
+	delete {roomlist::*}
+	delete {room_timeup_detection::*}
+	delete {room_timeup_detection_bossbar::*}
+
+#-------inv
+command /sbb [<text>]:
+	permission: siso
+	trigger:
+		if arg 1 is set:
+			stop
+		if scoreboard "translucent" is set:
+			send "unko exist"
+			stop
+		register new scoreboard team "translucent"
+		set {_team} to scoreboard "translucent" team
+		#set scoreboard team option seefriendlyinvisibles of team {_team} to true
+		#[skellett] [(score[ ][board]|board)] [team] option[s] [status] %teamoption% [(for|of)] [the] [team] %team%
+		#loop all players in world "%player%_room":
+			#send "%loop-player%"
+			#scoreboard add entry of "%loop-player%" to {_team}
+		send "%all of scoreboard entries in team {_team}%"
+
+#---------visual---------
+function show_points(p: player, room: offline player):
+	set {_high} to 0
+	wipe {_p}'s sidebar
+	set name of sidebar of {_p} to "&3&lPoints"
+	loop {room::%{_room}%::points::*}:
+		set {_ranking::%loop-index%} to loop-value
+	loop size({_ranking::*}) times:
+		loop {_ranking::*}:
+			loop-value-2 > {_high}
+			set {_high} to loop-value-2
+			set {_highplayer} to loop-index
+		if loop-number is 1:
+			set score "&e❶ &d%{_highplayer}%: &a&l%{_high}%" in sidebar of {_p} to 100 - loop-number
+		else if loop-number is 2:
+			set score "&f❷ &d%{_highplayer}%: &a&l%{_high}%" in sidebar of {_p} to 100 - loop-number
+		else if loop-number is 3:
+			set score "&6❸ &d%{_highplayer}%: &a&l%{_high}%" in sidebar of {_p} to 100 - loop-number
+		else:
+			set score "&6%{_highplayer}%&f: &a&l%{_high}%" in sidebar of {_p} to 100 - loop-number
+		set {_high} to 0
+		delete {_ranking::%{_highplayer}%}
+	set score "  " in sidebar of {_p} to 3
+	set score "&5Round: &a%{room::%{_room}%::round_now}%&f/&6%{room::%{_room}%::round}%" in sidebar of {_p} to 2
+	set score " " in sidebar of {_p} to 1
+	set score "&b%{_room}%'s Room" in sidebar of {_p} to 0
+
+function show_goal_score(p: player, room: offline player):
+	set {_high} to 9999
+	wipe {_p}'s sidebar
+	set name of sidebar of {_p} to "&6&lGoal Time"
+	loop {room::%{_room}%::game::time::*}:
+		set {_ranking::%loop-index%} to loop-value
+	loop size({room::%{_room}%::game::time::*}) times:
+		loop {_ranking::*}:
+			loop-value-2 < {_high}
+			set {_high} to loop-value-2
+			set {_highplayer} to loop-index
+		if loop-number is 1:
+			set score "&e&l✯&f&d%{_highplayer}%&f: &b&l%{_high}%秒" in sidebar of {_p} to 100 - loop-number
+		else:
+			set score "&e%{_highplayer}%&f: &b&l%{_high}%秒" in sidebar of {_p} to 100 - loop-number
+		set {_high} to 9999
+		delete {_ranking::%{_highplayer}%}
+	set score " " in sidebar of {_p} to 1
+	set score "&5Average Time&f: &2%average({server::%{room::%{_room}%::map}%::ranking::*}) / 0.20%" in sidebar of {_p} to 0
+
+function show_room_scoreborad(p: player, room: offline player):
+	set {_high} to 9999
+	wipe {_p}'s sidebar
+	set name of sidebar of {_p} to "&3&l%{_room}%'s Room"
+	if {room::%{_room}%::round_now} is not set:
+		set score "&6Round: &a0&f/&6%{room::%{_room}%::round}%" in sidebar of {_p} to 3
+	else:
+		set score "&6Round: &a%{room::%{_room}%::round_now}%&f/&6%{room::%{_room}%::round}%" in sidebar of {_p} to 3
+	set {_players} to size(all players in world "%{_room}%_room" parsed as world)
+	set score "&6Players: &a%{_players}%" in sidebar of {_p} to 2
+	set score "&6Private: &a%{room::%{_room}%::private}%" in sidebar of {_p} to 1
+			
+function map_clone_location(server: text, p: player, new_map: text):
+	#spawn
+	set {room::%{_p}%::game::spawn} to move_location_world({server::%{_server}%::spawn}, {_new_map})
+	#startpoint
+	set {room::%{_p}%::game::startpoint} to move_location_world({server::%{_server}%::startpoint}, {_new_map})
+	#endpoint
+	set {room::%{_p}%::game::endpoint} to move_location_world({server::%{_server}%::endpoint}, {_new_map})
+	#Potion effect
+	if {server::%{_server}%::effect_location::*} is set:
+		loop {server::%{_server}%::effect_location::*}:
+			set {room::%{_p}%::game::effect_location::%loop-index%} to move_location_world(loop-value, {_new_map})
+		loop {room::%{_p}%::game::effect_location::*}:
+			set {effect.%{_server}%} to {effect.%loop-value%}
+			set {effect_time.%{_server}%} to {effect_time.%loop-value%}
+			set {effect_lv.%{_server}%} to {effect_lv.%loop-value%}
+
+function map_settings(map: text):
+	spawn shulker at {room::%{_map}%::game::startpoint}
+	apply invisibility 1 without particles to last spawned entity for 5 minutes
+	set glowing of last spawned entity to true
+	add "{NoAI:1}" to nbt of last spawned entity
+
+	spawn shulker at {room::%{_map}%::game::endpoint}
+	apply invisibility 1 without particles to last spawned entity for 5 minutes
+	set glowing of last spawned entity to true
+	add "{NoAI:1}" to nbt of last spawned entity
+
+on damage of shulker:
+	cancel event
+
+function points_sound(p: player, count: number):
+	loop {_count} times:
+		wait 2 tick
+		sound("block.note.harp", {_p}, 2)
+
+function move_location_world(old_location: location, map: text) :: location:
+	return location({_old_location}'s x-location, {_old_location}'s y-location, {_old_location}'s z-location, {_map} parsed as world, yaw of {_old_location}, pitch of {_old_location})
+
+#function set_server_location(server: text):
+	#World Load
+	#command "/mv load %{_server}%"
+	#spawn
+	#set {server::%{_server}%::spawn} to parse_text_location({server::%{_server}%::spawn_text})
+	#startpoint
+	#set {server::%{_server}%::startpoint} to parse_text_location({server::%{_server}%::startpoint_text})
+	#endpoint
+	#set {server::%{_server}%::endpoint} to parse_text_location({server::%{_server}%::endpoint_text})
+	#Potion effect
+	#loop {server::%{_server}%::effect_location_text::*}:
+		#set {_parse_loc} to parse_text_location(loop-value)
+		#add {_parse_loc} to {server::%{_server}%::effect_location::*}
+		#set {effect.%{_parse_loc}%} to {effect_text.%loop-value%}
+		#set {effect_time.%{_parse_loc}%} to {effect_time_text.%loop-value%}
+		#set {effect_lv.%{_parse_loc}%} to {effect_lv_text.%loop-value%}
+
+command /ea <text>:
+	trigger:
+		evaluate arg
